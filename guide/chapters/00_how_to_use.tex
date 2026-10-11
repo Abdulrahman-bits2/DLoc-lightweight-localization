@@ -1,0 +1,116 @@
+%% ====================================================================
+%%  How to Use This Guide  (unnumbered preface)
+%% ====================================================================
+\chapter*{How to Use This Guide}
+\addcontentsline{toc}{chapter}{How to Use This Guide}
+\markboth{How to Use This Guide}{}
+
+This document is a \emph{concept-first companion} to the thesis \emph{``Lightweight
+Knowledge-Distilled Deep Learning for WiFi Indoor Localization.''} The thesis reports \emph{what} we
+did and \emph{what} we found; this guide explains \emph{why} every concept works and \emph{why} every
+model behaved the way it did, starting from the foundations. It is written so that each of the three
+authors can read any part independently and walk into the defense able to explain --- not just recite
+--- the work. It complements the four system-reference documents in \code{docs/}
+(\code{01\_dloc\_architecture}, \code{02\_dataset}, \code{03\_model\_architectures},
+\code{04\_experiments}); where those say ``here is exactly what our system is,'' this guide teaches
+the underlying ideas.
+
+\section*{The thesis in one page}
+
+\textbf{The problem.} GPS does not work indoors, but WiFi access points (APs) are everywhere and
+already measure \emph{Channel State Information} (CSI). DLoc~--- a 2020 system from UC San Diego ---
+turns CSI into an image and learns to ``translate'' it into a heatmap whose bright spot is the
+person's location, reaching sub-meter accuracy. The catch: DLoc has \textbf{16.5 million parameters},
+far too heavy for the edge devices (gateways, phones, the APs themselves) where indoor localization
+is actually useful.
+
+\textbf{The question.} Is that 16.5\,M cost \emph{inherent} to the task, or is DLoc simply
+over-parameterized? If it is over-parameterized, how small a model can still localize accurately, and
+what do we lose along the way?
+
+\textbf{What we did.} We compressed DLoc into a family of lightweight ``student'' models
+---MobileNetV2 (2.3\,M), a minimal TinyCNN (47\,K), a MobileNetV2 encoder with U-Net skip connections
+(2.41\,M), and a state-space Mamba model (0.65\,M)--- and trained each one both \emph{standalone} and
+\emph{distilled} from the DLoc teacher. We then evaluated all of them along five axes: in-distribution
+accuracy, robustness to signal degradation, cross-session generalization, statistical reproducibility,
+and computational efficiency.
+
+\textbf{The headline result.} A \textbf{MobileNetV2-UNet with only 2.41\,M parameters reaches
+0.640\,m median error}---\emph{better} than the 0.707\,m DLoc baseline---while using $6.8\times$ fewer
+parameters and $56\times$ fewer floating-point operations. The cost of DLoc is therefore \emph{not}
+inherent: a model an order of magnitude smaller can match or beat it.
+
+\begin{keyidea}
+The thesis is fundamentally an \textbf{efficiency} result wrapped around a \textbf{scientific} one.
+The efficiency result: an order-of-magnitude-smaller model matches DLoc. The scientific result: the
+two ways we made the small model good---\emph{U-Net skip connections} and \emph{knowledge
+distillation}---improve different kinds of \emph{robustness}, and distillation only helps models above
+a capacity threshold of about 2\,M parameters.
+\end{keyidea}
+
+\section*{The argument, as a chain}
+
+Read the thesis as a single chain of claims; every chapter of this guide deepens one link:
+
+\begin{enumerate}[leftmargin=2.2em]
+  \item Localization can be framed as \emph{image-to-image translation} from CSI heatmaps to a
+  location heatmap (Ch.~\ref{ch:foundations}).
+  \item The building blocks that make a network small \emph{and} good are convolutions, skip
+  connections, depthwise-separable convolutions, and U-Net skips (Ch.~\ref{ch:blocks}).
+  \item \emph{Knowledge distillation} can transfer a big teacher's behavior into a small student
+  (Ch.~\ref{ch:distill}); for our heatmap task it acts as ``spatial label smoothing.''
+  \item We measure everything with a pixel-distance error and its \emph{distribution} ---median, P90,
+  P99, mean, and the CDF (Ch.~\ref{ch:eval}).
+  \item Each architecture then behaves in a specific, explainable way ---the over-parameterized
+  teacher, the lossless MobileNetV2, the under-capacity TinyCNN, the teacher-beating U-Net, the
+  mismatched Mamba (Ch.~\ref{ch:arch}).
+  \item Comparing them yields six findings about compression, architecture, and distillation
+  (Ch.~\ref{ch:findings}).
+  \item Finally, anticipate the committee's questions (Ch.~\ref{ch:qa}).
+\end{enumerate}
+
+\section*{How to read it, depending on your goal}
+
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{``I want to understand the whole thing.''} Read front to back. Each chapter assumes
+  the previous one.
+  \item \textbf{``I own the architecture questions.''} Read Ch.~\ref{ch:blocks} (concepts) then
+  Ch.~\ref{ch:arch} (each model).
+  \item \textbf{``I own distillation/robustness.''} Read Ch.~\ref{ch:distill} and Ch.~\ref{ch:eval},
+  then findings 3--5 in Ch.~\ref{ch:findings}.
+  \item \textbf{``I want to rehearse.''} Go straight to the Defense Q\&A (Ch.~\ref{ch:qa}) and the
+  cheat-sheet in Appendix~\ref{app:glossary}; follow each answer's cross-reference back when a concept
+  is shaky.
+\end{itemize}
+
+\section*{Concept-to-thesis map}
+
+Table~\ref{tab:concept_map} points each concept to where it lives in the thesis, so this guide and the
+thesis stay in lock-step.
+
+\begin{table}[H]
+\centering
+\caption{Where each concept appears in the thesis.}
+\label{tab:concept_map}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Concept} & \textbf{This guide} & \textbf{Thesis location} \\
+\midrule
+CSI, AoA/ToF, image-translation framing & Ch.~\ref{ch:foundations} & Sec.~3.1, docs/01--02 \\
+Conv / encoder--decoder / skips         & Ch.~\ref{ch:blocks}      & Sec.~2.3 \\
+Depthwise-separable, inverted residuals & Ch.~\ref{ch:blocks}      & Sec.~2.3.2 \\
+U-Net skip connections                  & Ch.~\ref{ch:blocks}      & Sec.~2.3.3, 3.3.3 \\
+State-space models / Mamba              & Ch.~\ref{ch:blocks}      & Sec.~2.3.4, 3.3.4 \\
+Knowledge distillation                  & Ch.~\ref{ch:distill}     & Sec.~2.2, 3.4 \\
+Error metric, percentiles, CDF          & Ch.~\ref{ch:eval}        & Sec.~3.6, 5.1 \\
+Robustness corruptions                  & Ch.~\ref{ch:eval}        & Sec.~3.5, 4.4, 5.3 \\
+Cross-session (LOSO / zero-shot)        & Ch.~\ref{ch:eval}        & Sec.~4.5, 5.4 \\
+Per-model results \& reasons            & Ch.~\ref{ch:arch}        & Ch.~5 (all) \\
+The six findings                        & Ch.~\ref{ch:findings}    & Ch.~5--6 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A running convention: green bold marks a \best{best} result and red marks a \worst{worst} result, the
+same as in the thesis tables.

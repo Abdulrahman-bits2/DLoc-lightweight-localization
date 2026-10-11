@@ -1,0 +1,219 @@
+%% ====================================================================
+%%  Chapter 2 — Architecture Concepts: the Deep-Learning Building Blocks
+%% ====================================================================
+\chapter{Architecture Concepts: the Building Blocks}
+\label{ch:blocks}
+
+Every model in the thesis is assembled from a small set of reusable ideas. This chapter teaches each
+idea \emph{once}, generically, so that Chapter~\ref{ch:arch} can simply say ``this model uses
+depthwise-separable convolutions and U-Net skips'' and you will already know what that means and why
+it matters. For each block we note which thesis model relies on it.
+
+\section{Convolutions: locality and weight sharing}
+\label{sec:blocks:conv}
+
+A convolutional layer slides a small learnable filter (say $3\times3$) across the image and computes a
+weighted sum at every position. Two properties make this ideal for our heatmaps:
+\begin{itemize}[leftmargin=1.4em,nosep]
+  \item \textbf{Locality.} Each output pixel depends only on a small neighborhood of the input, which
+  matches the fact that a bright spot in a CSI heatmap is a \emph{local} feature.
+  \item \textbf{Weight sharing.} The \emph{same} filter is reused at every position, so the layer has
+  few parameters and detects a feature wherever it appears. A network needs far fewer weights than a
+  fully connected layer would.
+\end{itemize}
+A convolution layer with a $D_k\times D_k$ kernel, $M$ input channels and $N$ output channels, applied
+to a $D_F\times D_F$ feature map, costs
+\[
+  \underbrace{D_k \cdot D_k \cdot M \cdot N \cdot D_F \cdot D_F}_{\text{multiply--accumulate operations}}
+\]
+operations. Keep this formula in mind ---the MobileNet trick (Sec.~\ref{sec:blocks:dwsep}) attacks the
+$M\cdot N$ factor in it.
+
+\begin{keyidea}
+Convolutions are cheap and spatially aware, which is why every \emph{successful} model here is
+convolutional. The one model that abandons convolution for a 1D sequence view ---Mamba--- is the one
+that fails.
+\end{keyidea}
+
+\section{Encoder--decoder networks and the bottleneck}
+\label{sec:blocks:encdec}
+
+Image-to-image translation networks have a characteristic hourglass shape:
+\begin{itemize}[leftmargin=1.4em,nosep]
+  \item an \textbf{encoder} repeatedly \emph{downsamples} (via stride-2 convolutions or pooling),
+  shrinking spatial size while growing the number of channels, until the image is compressed into a
+  small, deep \textbf{bottleneck} (latent) representation;
+  \item a \textbf{decoder} then \emph{upsamples} (via transposed convolutions) back to the original
+  resolution to produce the output heatmap.
+\end{itemize}
+The encoder discovers \emph{what} is in the image; the decoder decides \emph{where} to place the
+output. DLoc, MobileNetV2, and the U-Net all share this skeleton. The catch is the bottleneck: by the
+time the image has been squeezed to the latent, fine spatial detail has been thrown away ---and for a
+\emph{localization} task, spatial detail is precisely the answer. This tension is what skip
+connections (next two sections) exist to resolve.
+
+\section{Residual (skip) connections}
+\label{sec:blocks:resnet}
+
+Very deep stacks of layers are hard to train: gradients shrink as they propagate backward and the
+network struggles to even learn the identity function. \textbf{ResNet} solved this with a
+\emph{residual} (or \emph{skip}) connection: instead of asking a block to compute a target mapping
+$\mathcal{H}(x)$ directly, you let it compute a residual $\mathcal{F}(x)$ and add the input back,
+\[
+  y = \mathcal{F}(x) + x .
+\]
+The $+x$ shortcut gives gradients a direct highway backward (enabling very deep networks) and lets a
+block ``do nothing'' easily when that is best. DLoc's encoder and decoders are built from residual
+blocks. The same shortcut philosophy ---route information \emph{past} intervening layers--- reappears,
+in a different form, as the U-Net skips that power our best model.
+
+\section{Depthwise-separable convolutions (the MobileNet trick)}
+\label{sec:blocks:dwsep}
+
+This is the single most important efficiency idea in the thesis. A standard convolution mixes
+information across \emph{space} and across \emph{channels} at the same time, which is what makes the
+$M\cdot N$ term in its cost so large. A \textbf{depthwise-separable} convolution factorizes that one
+operation into two cheaper ones:
+\begin{enumerate}[leftmargin=1.6em,nosep]
+  \item a \textbf{depthwise} convolution ---one $D_k\times D_k$ filter \emph{per input channel},
+  mixing only over space, not channels (cost $D_k\,D_k\,M\,D_F\,D_F$);
+  \item a \textbf{pointwise} ($1\times1$) convolution ---mixing only over channels, not space (cost
+  $M\,N\,D_F\,D_F$).
+\end{enumerate}
+The combined cost relative to a standard convolution is
+\[
+  \frac{D_k D_k\,M + M N}{D_k D_k\,M N} \;=\; \frac{1}{N} + \frac{1}{D_k^{2}} .
+\]
+For the usual $3\times3$ kernels this is roughly $\tfrac19$ ---an \textbf{$8$--$9\times$ reduction} in
+multiply--accumulate operations for nearly the same representational power.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[font=\small,
+  blk/.style={draw,rounded corners,minimum height=0.85cm,minimum width=2.7cm,align=center},
+  arr/.style={-{Stealth[length=2.2mm]},thick}]
+% standard
+\node[blk,fill=accent3!12,draw=accent3!70!black] (std) {Standard $3{\times}3$\\mix space \emph{and} channels};
+\node[align=center,below=2pt of std,font=\footnotesize] {cost $\propto D_k^2 M N$};
+% separable
+\node[blk,fill=accent2!14,draw=accent2!70!black,right=2.6cm of std,yshift=0.65cm] (dw) {Depthwise $3{\times}3$\\(space only, per channel)};
+\node[blk,fill=accent2!14,draw=accent2!70!black,below=0.55cm of dw] (pw) {Pointwise $1{\times}1$\\(channels only)};
+\node[align=center,below=2pt of pw,font=\footnotesize] {cost $\propto (D_k^2 M + MN)$};
+\draw[arr] (dw) -- (pw);
+\node[font=\Large] at ($(std)!0.5!(dw)+(0,-0.32)$) {$\Rightarrow$};
+\end{tikzpicture}
+\caption{A standard convolution (left) mixes spatial \emph{and} channel information in one expensive
+step. The depthwise-separable factorization (right) splits it into a cheap spatial mix (depthwise)
+followed by a cheap channel mix (pointwise), cutting cost by $\sim$$8$--$9\times$.}
+\label{fig:blocks:dwsep}
+\end{figure}
+
+\begin{keyidea}
+Depthwise-separable convolutions are \emph{why} a 2.3\,M-parameter MobileNetV2 can do the work of
+16.5\,M-parameter DLoc. They buy compression almost for free by separating ``where'' (depthwise) from
+``what'' (pointwise). Used by: MobileNetV2, MobileNetV2-UNet.
+\end{keyidea}
+
+\section{Inverted residuals and linear bottlenecks (MobileNetV2)}
+\label{sec:blocks:invres}
+
+MobileNetV2 wraps depthwise-separable convolutions in an \textbf{inverted residual} block. A classic
+residual block is \emph{wide $\to$ narrow $\to$ wide} with the skip on the wide tensors. MobileNetV2
+inverts this to \emph{narrow $\to$ wide $\to$ narrow}:
+\begin{enumerate}[leftmargin=1.6em,nosep]
+  \item \textbf{Expand}: a $1\times1$ convolution widens the channels by a factor $t$ (typically~6).
+  \item \textbf{Depthwise}: a $3\times3$ depthwise convolution filters in the wide space.
+  \item \textbf{Project}: a $1\times1$ convolution compresses back to a narrow output, with
+  \emph{no} activation ---a \textbf{linear bottleneck}.
+\end{enumerate}
+Two subtleties matter. The skip connects the \emph{narrow} bottleneck tensors (so it moves little
+data, saving memory ---``inverted''). And the projection is \emph{linear} because applying a ReLU in
+a low-dimensional space destroys information (ReLU zeroes out negatives, and there is no room to spare
+in a narrow tensor). The result is a block that keeps a small memory footprint while still computing
+in a rich, high-dimensional space. Used by: MobileNetV2, MobileNetV2-UNet.
+
+\section{U-Net skip connections}
+\label{sec:blocks:unet}
+
+Recall the bottleneck problem (Sec.~\ref{sec:blocks:encdec}): the encoder discards fine spatial detail
+that a localization decoder desperately needs. \textbf{U-Net} fixes this directly. As the encoder
+downsamples, it \emph{saves} its intermediate feature maps; as the decoder upsamples, it
+\emph{concatenates} the matching-resolution encoder feature map onto the decoder's tensor before the
+next convolution. High-resolution detail therefore reaches the output through a short path that
+\emph{bypasses the bottleneck} entirely.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[font=\small,
+  enc/.style={draw=accent,fill=accent!10,minimum width=1.4cm,minimum height=0.8cm,align=center},
+  dec/.style={draw=accent2!70!black,fill=accent2!14,minimum width=1.4cm,minimum height=0.8cm,align=center},
+  bott/.style={draw=accent3!70!black,fill=accent3!16,minimum width=1.4cm,minimum height=0.8cm,align=center},
+  arr/.style={-{Stealth[length=2mm]},thick},
+  skip/.style={-{Stealth[length=2mm]},accent2!70!black,thick,dashed}]
+\node[enc] (e1) {Enc 1};
+\node[enc,below right=0.45cm and 0.5cm of e1] (e2) {Enc 2};
+\node[bott,below right=0.45cm and 0.5cm of e2] (b) {Bottle-\\neck};
+\node[dec,above right=0.45cm and 0.5cm of b] (d2) {Dec 2};
+\node[dec,above right=0.45cm and 0.5cm of d2] (d1) {Dec 1};
+\draw[arr] (e1) -- (e2); \draw[arr] (e2) -- (b);
+\draw[arr] (b) -- (d2); \draw[arr] (d2) -- (d1);
+\draw[skip] (e1) to[out=0,in=180] node[above,font=\footnotesize,black]{concat} (d1);
+\draw[skip] (e2) to[out=0,in=180] node[above,font=\footnotesize,black]{concat} (d2);
+\end{tikzpicture}
+\caption{U-Net skips (dashed) concatenate each encoder stage's high-resolution feature map directly
+into the decoder at the matching resolution, so spatial detail bypasses the lossy bottleneck. Our
+model concatenates encoder/decoder feature maps of $320{+}96$, $128{+}32$, and $64{+}24$ channels at
+its three skip levels.}
+\label{fig:blocks:unet}
+\end{figure}
+
+\begin{keyidea}
+U-Net skips are the reason our 2.41\,M model \emph{beats} its 16.5\,M teacher: they restore the
+spatial precision the bottleneck throws away. As a bonus (Ch.~\ref{ch:arch}--\ref{ch:findings}), the
+shallow features they carry are also less corrupted by noise, giving ``free'' robustness. Used by:
+MobileNetV2-UNet.
+\end{keyidea}
+
+\section{State-space models and Mamba}
+\label{sec:blocks:mamba}
+
+The last building block is the odd one out. \textbf{State-space models} (SSMs) come from sequence
+modeling, an alternative to attention/Transformers. An SSM maintains a hidden state $h_t$ that it
+rolls forward one step at a time along a sequence:
+\[
+  h_t = \bar{A}\,h_{t-1} + \bar{B}\,u_t, \qquad y_t = C\,h_t ,
+\]
+where $u_t$ is the input at step $t$ and $\bar A,\bar B,C$ are (discretized) state matrices.
+\textbf{Mamba} makes this \emph{selective}: the matrices $\bar A,\bar B,C$ (and the time step) become
+\emph{functions of the input}, so the model can choose what to remember and what to forget based on
+content ---all in linear time over the sequence length, via a hardware-efficient parallel scan.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[font=\small,
+  st/.style={draw=accent,fill=accent!8,circle,minimum size=0.8cm},
+  io/.style={font=\footnotesize},
+  arr/.style={-{Stealth[length=2mm]},thick}]
+\foreach \i in {1,2,3,4} {
+  \node[st] (h\i) at (\i*2,0) {$h_{\i}$};
+  \node[io,below=0.45cm of h\i] (u\i) {$u_{\i}$};
+  \node[io,above=0.45cm of h\i] (y\i) {$y_{\i}$};
+  \draw[arr] (u\i) -- (h\i);
+  \draw[arr] (h\i) -- (y\i);
+}
+\foreach \i/\j in {1/2,2/3,3/4} {\draw[arr] (h\i) -- (h\j);}
+\node[io,left=0.5cm of h1] {$\dots$};
+\node[io,right=0.5cm of h4] {$\dots$};
+\end{tikzpicture}
+\caption{An SSM unrolled along a sequence: the hidden state $h_t$ carries information forward
+\emph{one step at a time} in a fixed 1D order. This is a natural fit for text or audio ---and a poor
+fit for a 2D spatial heatmap, which has no canonical 1D ordering.}
+\label{fig:blocks:ssm}
+\end{figure}
+
+The crucial point for this thesis is the \emph{inductive bias}: an SSM is built around a
+\textbf{one-dimensional, ordered} sequence. To apply it to an image you must first \emph{flatten} the
+2D grid into a 1D sequence, which imposes an arbitrary scan order and tears apart pixels that are
+spatial neighbors but far apart in the flattened order. As Chapter~\ref{ch:arch} shows, this mismatch
+---not a lack of capacity--- is exactly why our Mamba variant failed to learn the heatmap task. Used
+by: the Mamba student (as a deliberate ``different inductive bias'' experiment).

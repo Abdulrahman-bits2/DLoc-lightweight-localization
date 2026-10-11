@@ -1,0 +1,10 @@
+Model Updates & Evaluation Summary
+Architecture Improvements: All model architectures have been transitioned to a distilled MobileNetV2 U-Net configuration, which has successfully improved overall performance through the distillation process.
+
+Key Results: This approach yielded the best results and experiment outcomes specifically during cross-session testing.
+
+Table Adjustments:
+
+Remove CNN from the comparison table, as its performance is not competitive.
+
+Add an accuracy comparison focused exclusively on the high-performing models.

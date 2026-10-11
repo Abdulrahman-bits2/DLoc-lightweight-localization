@@ -1,0 +1,44 @@
+============================================================
+DLoc THESIS - REWRITE BATCH 4 of 5
+
+Chapter 5 (5.2 U-Net & Scheduler, 5.3 Robustness, 5.4 Cross-Session)
+
+Rewrite in your voice. Keep section headings and [cite: X] markers in place.
+
+Tables/equations/figures are NOT here - they stay as-is in the .tex files.
+
+5.2 U-Net Architecture and Scheduler Comparison
+
+We train the MobileNetV2-UNet for 120 epochs with both the cosine annealing and step decay learning rate schedules, with the MobileNetV2-UNet in both its standalone and distilled form (see Table 5.2).
+
+The standalone and distilled variants of the MobileNetV2-UNet reach a median value of 0.640 m, the same as when trained with the other learning rate schedule. The cosine schedule achieves slightly lower tail percentiles than the step decay schedule, with P90 and P99 percentiles being 1.523 m and 2.750 m for the cosine decay schedule versus 1.552 m and 2.918 m for the step decay schedule. These results are likely due to the smoothing of the learning rate for the cosine schedule reaching a minimum learning rate over the final few epochs of training. For the distilled model, the tail percentiles for the P99 measurement are further improved to 2.587 m. Thus, the learning rate schedule has a relatively small effect upon the performance of the model; the architecture is the dominant factor.
+
+5.3 Robustness Under Signal Degradation
+
+The robustness of each of the models is evaluated under a variety of signal degradations (with no retraining of the models). Tables 5.3-5.5 contain the measurement of the error rate for each of the models with Gaussian noise, AP dropout, and random pixel corruption (with the distilled MobileNetV2 achieving the lowest error in each category). Table 5.6 contains a summary of the results when each model was evaluated under Gaussian noise corruption only.
+
+The MobileNetV2 model with distillation achieves 3.4x greater robustness against Gaussian noise corruption. The standalone MobileNetV2 model experiences a median error of 16.4 m when evaluated with sigma = 0.1 Gaussian noise, indicating that it is guessing at the floorplan. The distilled model only degrades to a median error of 4.8 m. This is likely due to the fact that during training, the model was trained with both the true labels of the ground truth, as well as trained to match the broader label predictions of the teacher model; this regularizes the model’s features towards a more noise-robust representation. This is the spatial regression analogue of the common temperature-scaled soft targets that are used in classification models during knowledge distillation [cite: Hinton-KD].
+
+The MobileNetV2-UNet model with skip connections exhibits 5.5x increased robustness against Gaussian noise. The standalone MobileNetV2-UNet reaches a median error of 3.0 m, compared to 16.4 m for the standalone MobileNetV2. The skip connections provide an additional layer of robustness by allowing the model to “look” at the features learned at the shallow layers of the model, which are less likely to be corrupted by the noise. Thus, the skip connections provide a form of robustness that is independent to the noise-distillation robustness.
+
+Interestingly, the distilled models with limited fitting capacity exhibit a degradation of performance with distillation. The distilled TinyCNN model degrades to a median error of 13.6 m in comparison to 7.9 m for the standalone model when evaluated under AP dropout (random 1-AP). This is likely due to the fact that the limited capacity of the TinyCNN model causes it to dedicate its model capacity to learn the teacher model’s representations of the AP interactions; when that AP is removed from the environment at test time, those learned interactions become invalid, and the model has no remaining capacity to learn the representation of the missing AP. Thus, there is a minimum capacity that a model must have in order to utilize knowledge distillation; below roughly 2 million parameters the model will degrade in performance with distillation.
+
+These two robustness techniques are not additive in their effects upon the MobileNetV2-UNet model. The standalone model exhibits a median error of 3.0 m when evaluated under Gaussian noise, whereas the distilled model exhibits a median error of 3.47 m. Thus, in this case, the architecture-based noise robustness provided by the skip connections is stronger than the training-based noise robustness introduced through knowledge distillation.
+
+5.4 Cross-Session Generalization
+
+A model that is to be deployed within one or more localizer devices will likely encounter changes in environment over time. Furthermore, the localizer may need to be deployed in an environment that is different from that in which the model was trained. Thus, its generalization to these different environments is of interest. The evaluation of cross-session generalization is performed in two ways. The first is through the use of the same leave-one-session-out evaluation as was used to evaluate the published DLoc model. The second is through a zero-shot evaluation of the models, wherein they are trained only upon the two July sessions, yet are evaluated on the August sessions.
+
+5.4.1 Fair Comparison: Leave-One-Session-Out
+
+We re-ran the MobileNetV2-UNet in the same manner as the published DLoc model, using three random seeds and leaving out the test session of that fold during training. Table 5.7 and Figure 5.3 contain the results of such an evaluation.
+
+In general, the MobileNetV2-UNet fared similarly to the DLoc model. In the different-furniture fold, the models are within 0.02 m of each other (0.822 m for our model vs. 0.82 m for the DLoc model); in the remaining folds, the MobileNetV2-UNet’s error is within 0.14 m of that of the DLoc model (averaging 0.930 m vs. 0.86 m). Furthermore, the MobileNetV2-UNet exhibits the same P90 error (2.374 m vs. 2.33 m), but exhibits a lower error in the challenging reflector fold (2.489 m for our model vs. 2.77 m for the DLoc model). Such differences are visible in the tails (reflector) of the CDF of the model error distributions (Figure 5.4). The remaining 0.03 m difference for the reflector fold is due to the fact that the DLoc model includes a consistency decoder that is trained to work well with the aluminum reflector, which exhibits specular multipath reflections. Thus, the different error rates between the models for the reflector are visible in the qualitative analyses of the predicted heatmaps for the reflector fold (Figure 5.5). Furthermore, the results are stable across the three different random seeds utilized to train the model (standard deviations of the median error between 0.016 m and 0.044 m). Thus, the MobileNetV2-UNet reaches similar accuracy to DLoc with 6.8x fewer parameters.
+
+5.4.2 Zero-Shot Stress Test
+
+In addition to the leave-one-session-out evaluation, we evaluated each model in a zero-shot manner; training each model only upon the two July training sessions, yet evaluating on the August training sessions. As such, this evaluation was purposely not a fair evaluation of each model against the DLoc model. Instead, this evaluation is performed as a means of determining any difference between the architectures or training techniques.
+
+The error of each model increases from Session 3 to Session 5, which is an indication of the inherent hierarchy in difficulty of the training sessions, which is a property of the environment in which those models were trained. More interestingly, though, the benefit of distillation is only visible in the August sessions for the hardest (reflector) fold; the benefit of distillation is negligible for the furniture folds, yet apparent in the reflector fold for both the MobileNetV2 model (1.500 m to 1.442 m) and the MobileNetV2-UNet model (1.334 m to 1.281 m).
+
+--- END OF BATCH 4 (next: Chapter 5 sections 5.5-5.7, Chapter 6, Chapter 7, Appendix) ---

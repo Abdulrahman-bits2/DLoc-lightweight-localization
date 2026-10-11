@@ -1,0 +1,393 @@
+% =====================================================================
+%  DLoc Compression — Figures Explained (Results & Discussion -> end)
+%  Self-contained: put the figure PDFs in the SAME folder and compile
+%  with pdfLaTeX (Overleaf-ready).
+% =====================================================================
+\documentclass[11pt]{article}
+
+\usepackage[a4paper,margin=2.2cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{tcolorbox}
+\tcbuselibrary{skins,breakable}
+\usepackage[hidelinks]{hyperref}
+
+\newtcolorbox{showbox}[1][What it shows (simple words)]{%
+  colback=blue!4, colframe=blue!45!black, fonttitle=\bfseries,
+  title=#1, breakable, left=2mm, right=2mm, top=1mm, bottom=1mm}
+\newtcolorbox{measurebox}[1][What it measures exactly]{%
+  colback=purple!4, colframe=purple!50!black, fonttitle=\bfseries,
+  title=#1, breakable, left=2mm, right=2mm, top=1mm, bottom=1mm}
+\newtcolorbox{madebox}[1][How we made it]{%
+  colback=gray!6, colframe=gray!55!black, fonttitle=\bfseries,
+  title=#1, breakable, left=2mm, right=2mm, top=1mm, bottom=1mm}
+\newtcolorbox{readbox}[1][What to read from it]{%
+  colback=green!5, colframe=green!45!black, fonttitle=\bfseries,
+  title=#1, breakable, left=2mm, right=2mm, top=1mm, bottom=1mm}
+
+\newcommand{\figpdf}[2][0.8]{\begin{center}\includegraphics[width=#1\linewidth]{#2}\end{center}}
+
+\title{\textbf{DLoc Compression --- Every Figure Explained}\\[2mm]
+\large Results \& Discussion to the End of the Thesis:\\
+what each figure shows, what it measures, and how we made it}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\vspace{3mm}\hrule\vspace{3mm}
+
+% =====================================================================
+\section{First: how to read these figures}
+% =====================================================================
+
+Every result figure is built from one basic quantity: the \textbf{localization error of each test
+sample}. Understand that and the metric words (median, P90, CDF) become easy.
+
+\subsection*{Localization error (the atom)}
+For one test sample, the model outputs a heatmap. We take the \textbf{brightest pixel} (the
+\emph{argmax}) as the \textbf{predicted location}, and compare it to the \textbf{true location} (the
+center of the ground-truth Gaussian bump). The straight-line (Euclidean) distance between them, in
+\textbf{meters}, is that sample's error. With $N = 4{,}260$ in-distribution test samples we get 4{,}260
+error values; the figures summarize those numbers in different ways.
+
+\subsection*{The summary numbers}
+\begin{itemize}[leftmargin=*,noitemsep]
+  \item \textbf{Median} --- sort all per-sample errors and take the middle one. ``Half the predictions
+        are better than this.'' Robust to a few wild outliers; the headline accuracy number.
+  \item \textbf{P90 / P99} --- the 90th / 99th percentile. ``90\% (or 99\%) of predictions are within
+        this distance.'' These describe the \emph{tail} --- the bad cases.
+  \item \textbf{Mean} --- the average; gets pulled upward by outliers, so it is usually larger than the
+        median.
+\end{itemize}
+
+\subsection*{The CDF (cumulative distribution function)}
+A CDF is a curve. The \textbf{x-axis is error in meters}; the \textbf{y-axis is the fraction of samples
+with error $\le x$}. So if the curve passes through $(1\,\text{m},\,0.7)$, then \textbf{70\% of
+predictions are within 1\,m}. The \textbf{median} is where the curve crosses $y = 0.5$; \textbf{P90}
+where it crosses $y = 0.9$.
+
+\begin{readbox}[How to read any CDF in this thesis]
+\textbf{Higher and more to the left = better} (more predictions achieve low error). A curve that climbs
+slowly / stays low means a model that rarely gets close. When two curves cross, the better model is the
+one that is higher at the error you care about.
+\end{readbox}
+
+\subsection*{The qualitative heatmaps}
+Some figures show the \emph{actual} predicted heatmaps for a few example samples. In every such panel:
+the colored blob is the model's predicted probability map (brightened so the sparse bump is visible), a
+\textbf{red cross ($\times$)} marks the \textbf{predicted} peak, and a \textbf{white circle ($\circ$)}
+marks the \textbf{true} location. When $\times$ and $\circ$ sit on top of each other, the prediction is
+good; when they are far apart, that is an error case.
+
+\begin{measurebox}[An honesty note on the median]
+The error is computed on a $0.1$\,m pixel grid, so the median is \emph{quantized} to a lattice of about
+$0.1\sqrt{n}$ meters. Two medians within $\sim$0.1\,m are effectively equal --- which is why we also
+report mean, CDF, and P90/P99 rather than the median alone.
+\end{measurebox}
+
+% =====================================================================
+\section{How the figures were generated (the pipeline)}
+% =====================================================================
+
+All figures are produced by scripts in \texttt{code/figures/} from the \textbf{released weights}
+(HuggingFace \texttt{JustAGeek/dloc-code}) and the \textbf{released data} (HuggingFace
+\texttt{JustAGeek/dloc-wild-fig10b}). They are \emph{reproducible}, not drawn by hand.
+
+\begin{enumerate}[leftmargin=*]
+  \item \texttt{dump\_results.py} --- the heavy step. For each model/test set it loads the trained
+        weights, runs every test sample through the model, and (a) computes the \textbf{per-sample
+        error} array (\texttt{errors\_<job>.npy}) and (b) saves six \textbf{representative predicted
+        heatmaps} (\texttt{heatmaps\_<job>.npz}), chosen at the error percentiles 2, 25, 50, 75, 90, 98
+        (so you see a best case, typical cases, and a worst case).
+  \item \texttt{plot\_cdfs.py} --- turns the \texttt{errors\_*.npy} arrays into the CDF curves
+        (in-distribution and cross-session).
+  \item \texttt{plot\_heatmaps.py} --- renders the six-panel qualitative figures from
+        \texttt{heatmaps\_*.npz} (red $\times$ = predicted peak, white $\circ$ = truth; a
+        \texttt{PowerNorm} with $\gamma = 0.4$ brightens the otherwise-faint Gaussian).
+  \item \texttt{plot\_crosssession.py} --- draws the leave-one-session-out median bars (our three-seed
+        mean$\pm$std vs.\ the published DLoc) from \texttt{code/results\_crosssession/*.json}.
+  \item \texttt{plot\_compression.py} --- draws the accuracy-vs-size and parameter-count plots from the
+        verified efficiency numbers.
+\end{enumerate}
+
+\begin{madebox}[Reproducibility detail worth knowing]
+The error is a per-sample \emph{argmax} loop. On a many-core machine, NumPy's threaded backend spins its
+whole thread pool for each tiny operation and the job appears to hang. The fix is to cap the math
+libraries to one thread (\texttt{OMP\_NUM\_THREADS=1}, etc.). With that cap, the regenerated medians
+match the thesis exactly (U-Net 0.640, MobileNetV2 0.707, TinyCNN 3.91), confirming the figures are
+faithful.
+\end{madebox}
+
+% =====================================================================
+\section{In-Distribution Figures (same-environment accuracy)}
+% =====================================================================
+
+These come from training and testing in the \textbf{same July environment} (17{,}574 train / 4{,}260
+test). They answer: \emph{``in the easy case, how accurate is each model?''}
+
+% ---------------------------------------------------------------
+\subsection{In-distribution error CDF (Thesis Fig.~5.1)}
+\figpdf[0.8]{cdf_fig10b.pdf}
+
+\begin{showbox}
+The error curves of the three convolutional students on the same July test set. It compares, across the
+\emph{whole} range of errors (not just one number), how often each model gets close.
+\end{showbox}
+
+\begin{measurebox}
+x-axis: localization error in meters. y-axis: fraction of the 4{,}260 test samples with error $\le x$.
+The height of each curve at a given x is ``what fraction of predictions are at least that good.''
+\end{measurebox}
+
+\begin{madebox}
+\texttt{dump\_results.py} produced \texttt{errors\_unet\_fig10b.npy},
+\texttt{errors\_mobilenet\_fig10b.npy}, \texttt{errors\_tinycnn\_fig10b.npy} (one error per test
+sample); \texttt{plot\_cdfs.py} sorted each array and plotted the cumulative fraction.
+\end{madebox}
+
+\begin{readbox}
+The \textbf{MobileNetV2-UNet} curve sits \emph{above} the plain \textbf{MobileNetV2} across the whole
+range (0.64\,m vs 0.71\,m median --- consistently better, not just on average). \textbf{TinyCNN} trails
+badly --- it never even reaches the 0.8 level within 3\,m, the visual signature of a model below the
+capacity floor.
+\end{readbox}
+
+% ---------------------------------------------------------------
+\subsection{Qualitative in-distribution predictions --- U-Net (Thesis Fig.~5.2)}
+\figpdf[1.0]{heatmaps_unet_fig10b.pdf}
+
+\begin{showbox}
+Six \emph{actual} predicted heatmaps from the U-Net, picked to span the error range (from a near-perfect
+case to a worst case). This shows \emph{what} a good vs.\ bad prediction looks like, not just a number.
+\end{showbox}
+
+\begin{measurebox}
+Each panel is one test sample chosen at an error percentile (2, 25, 50, 75, 90, 98). Color = predicted
+probability over the floor; \textbf{red $\times$} = predicted peak; \textbf{white $\circ$} = true
+location. The distance between $\times$ and $\circ$ is that sample's error.
+\end{measurebox}
+
+\begin{madebox}
+The six samples and their heatmaps were saved by \texttt{dump\_results.py} into
+\texttt{heatmaps\_unet\_fig10b.npz}; \texttt{plot\_heatmaps.py} rendered them with the peak/truth markers
+and gamma-brightening.
+\end{madebox}
+
+\begin{readbox}
+Low-error panels (left) show a \textbf{single tight blob} with $\times$ right on $\circ$. The high-error
+panel shows a \textbf{multimodal} heatmap (several bright spots) where the model picked the wrong one ---
+this is what causes the rare large errors (the tail of the CDF).
+\end{readbox}
+
+% ---------------------------------------------------------------
+\subsection{Qualitative in-distribution --- MobileNetV2 (Appendix)}
+\figpdf[1.0]{heatmaps_mobilenet_fig10b.pdf}
+
+\begin{showbox}
+The same six-panel view for the plain \textbf{MobileNetV2}, to compare its prediction quality against the
+U-Net's.
+\end{showbox}
+
+\begin{readbox}
+Predictions are good and tight (it matches DLoc at 0.707\,m), but the blobs are slightly less sharp than
+the U-Net's --- consistent with the U-Net's small accuracy edge.
+\end{readbox}
+
+% ---------------------------------------------------------------
+\subsection{Qualitative in-distribution --- TinyCNN (Appendix)}
+\figpdf[1.0]{heatmaps_tinycnn_fig10b.pdf}
+
+\begin{showbox}
+The six-panel view for \textbf{TinyCNN} --- the model that failed (3.9\,m median).
+\end{showbox}
+
+\begin{readbox}
+The heatmaps are \textbf{broad and not peaked} --- the model spreads its probability instead of
+committing to a spot, so $\times$ often sits far from $\circ$. This is the visual signature of a model
+\emph{below the $\sim$2M capacity floor}: too little capacity to form a sharp, confident prediction.
+\end{readbox}
+
+% =====================================================================
+\section{Cross-Session Figures (does it transfer to a new environment?)}
+% =====================================================================
+
+These come from the leave-one-session-out protocol: train on July + two August sessions, test on the
+\textbf{held-out} August session. They answer: \emph{``does it still work when the room changes, and how
+does it compare to DLoc fairly?''}
+
+% ---------------------------------------------------------------
+\subsection{Leave-one-session-out median bars (Thesis Fig.~5.3)}
+\figpdf[0.78]{crosssession_median.pdf}
+
+\begin{showbox}
+A bar chart comparing our \textbf{2.41M-parameter U-Net} against the published \textbf{16.5M-parameter
+DLoc}, on each of the three held-out August environments. This is the headline ``fair comparison.''
+\end{showbox}
+
+\begin{measurebox}
+Each bar's height = the \textbf{median} cross-session error (meters) on that held-out fold. Our bars are
+the \textbf{three-seed mean}, with an error bar showing the standard deviation across seeds (42/123/777).
+\end{measurebox}
+
+\begin{madebox}
+\texttt{plot\_crosssession.py} read the per-fold, per-seed results from
+\texttt{code/results\_crosssession/*.json} (nine training runs: 3 folds $\times$ 3 seeds, 120 epochs
+each), averaged the seeds, and plotted them beside the DLoc paper's published numbers.
+\end{madebox}
+
+\begin{readbox}
+Our U-Net \textbf{matches DLoc on the different-furniture fold} (0.822 vs 0.82\,m) and is within
+$\sim$0.1\,m on the others --- \emph{at 6.8$\times$ fewer parameters}. The \textbf{reflector fold is
+clearly the tallest} (hardest), as expected from the physics. The small error bars show the result is
+stable across seeds (not luck).
+\end{readbox}
+
+% ---------------------------------------------------------------
+\subsection{Cross-session error CDFs (Thesis Fig.~5.4)}
+\figpdf[0.78]{cdf_crosssession.pdf}
+
+\begin{showbox}
+The full error distribution (not just the median) of the U-Net on each of the three held-out folds, on
+one plot.
+\end{showbox}
+
+\begin{measurebox}
+x-axis: error in meters; y-axis: fraction of that fold's test samples with error $\le x$. One curve per
+held-out August session (11{,}201 / 8{,}754 / 5{,}486 samples respectively).
+\end{measurebox}
+
+\begin{madebox}
+From \texttt{errors\_unet\_cross\_env2/3/4.npy} (the per-sample errors on each held-out fold), plotted by
+\texttt{plot\_cdfs.py}.
+\end{madebox}
+
+\begin{readbox}
+The two \textbf{furniture folds track closely} together, while the \textbf{reflector fold
+(Aug16\_4\_ref) is shifted to larger errors} --- its curve climbs more slowly, with a heavier tail. This
+is the distribution-level view of why the reflector is the hardest environment.
+\end{readbox}
+
+% ---------------------------------------------------------------
+\subsection{Qualitative cross-session --- reflector fold (Thesis Fig.~5.5)}
+\figpdf[1.0]{heatmaps_unet_cross_env4.pdf}
+
+\begin{showbox}
+Six predicted heatmaps on the hardest fold (the \textbf{aluminum reflector} session), to \emph{see} why
+the errors grow there.
+\end{showbox}
+
+\begin{measurebox}
+Same format as the in-distribution heatmaps (red $\times$ = predicted peak, white $\circ$ = truth, six
+error percentiles), but on the unseen reflector environment.
+\end{measurebox}
+
+\begin{readbox}
+Compared with the clean in-distribution panels, these show \textbf{extra scattered probability mass} ---
+the ``phantom'' specular reflections from the metal panel. That extra bright junk is what pulls the
+predicted peak away from the truth and drives the larger errors on this fold.
+\end{readbox}
+
+% ---------------------------------------------------------------
+\subsection{Qualitative cross-session --- furniture folds (Appendix)}
+\figpdf[1.0]{heatmaps_unet_cross_env2.pdf}
+\figpdf[1.0]{heatmaps_unet_cross_env3.pdf}
+
+\begin{showbox}
+The same six-panel view on the two \emph{furniture} folds: Aug16\_1 (furniture rearrangement) and
+Aug16\_3 (different furniture).
+\end{showbox}
+
+\begin{readbox}
+Predictions stay mostly tight and on-target --- noticeably cleaner than the reflector fold above. This
+visually confirms the difficulty ordering: \textbf{furniture changes are mild domain shifts; the metal
+reflector is the severe one.}
+\end{readbox}
+
+% =====================================================================
+\section{Efficiency Figures (is it actually lighter?)}
+% =====================================================================
+
+These come from the efficiency benchmark (dummy inputs, no data, no training). They answer: \emph{``what
+did we pay --- or save --- in size and speed?''}
+
+% ---------------------------------------------------------------
+\subsection{Accuracy versus model size (Thesis Fig.~5.6)}
+\figpdf[0.7]{compression_pareto.pdf}
+
+\begin{showbox}
+A scatter of every model placed by \textbf{how accurate} it is and \textbf{how big} it is --- so you can
+see the best trade-off at a glance.
+\end{showbox}
+
+\begin{measurebox}
+One axis is median error (lower = better), the other is parameter count / model size. \textbf{The ideal
+corner is the lower-left}: low error \emph{and} small size.
+\end{measurebox}
+
+\begin{madebox}
+\texttt{plot\_compression.py}, using the verified accuracy and parameter numbers (DLoc 16.5M, U-Net
+2.41M, MobileNetV2 2.3M, TinyCNN 47K, Mamba 0.65M).
+\end{madebox}
+
+\begin{readbox}
+The \textbf{MobileNetV2-UNet sits in the favorable lower-left} --- best median error at a small fraction
+of DLoc's size. Mamba sits at the top (worst error); TinyCNN is small but far to the high-error side.
+This single plot is the visual summary of the whole compression story.
+\end{readbox}
+
+% ---------------------------------------------------------------
+\subsection{Parameter counts (Thesis Fig.~5.7)}
+\figpdf[0.7]{compression_params.pdf}
+
+\begin{showbox}
+A simple bar chart of how many parameters each model has, on a \textbf{log scale} (so the huge range from
+47K to 16.5M fits on one plot).
+\end{showbox}
+
+\begin{measurebox}
+Bar height = parameter count (log scale). The log axis means each equal step is a $10\times$ change, not
+a fixed amount.
+\end{measurebox}
+
+\begin{readbox}
+Shows the scale of compression at a glance: the U-Net and MobileNetV2 bars are far below DLoc
+($\sim$7$\times$ smaller), and TinyCNN is tiny ($351\times$ smaller) --- but recall from the accuracy
+figures that TinyCNN paid for that with poor accuracy.
+\end{readbox}
+
+% =====================================================================
+\section{One-screen summary}
+% =====================================================================
+
+\begin{table}[h]
+\centering
+\footnotesize
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Figure} & \textbf{Measures} & \textbf{Main message} \\
+\midrule
+cdf\_fig10b              & in-dist error distribution      & U-Net best across the whole range \\
+heatmaps\_unet\_fig10b   & in-dist predicted heatmaps      & tight blobs; tail = multimodal cases \\
+heatmaps\_mobilenet      & in-dist predicted heatmaps      & good, slightly less sharp than U-Net \\
+heatmaps\_tinycnn        & in-dist predicted heatmaps      & broad/unpeaked = below capacity floor \\
+crosssession\_median     & LOSO median vs DLoc             & competitive at 6.8$\times$ smaller \\
+cdf\_crosssession        & cross-session error distrib.\   & reflector fold hardest (heavy tail) \\
+heatmaps\_unet\_cross\_env4 & reflector-fold heatmaps      & phantom reflections cause errors \\
+heatmaps\_unet\_cross\_env2/3 & furniture-fold heatmaps   & mild shift, predictions stay tight \\
+compression\_pareto      & accuracy vs size               & U-Net at the ideal lower-left \\
+compression\_params      & parameter counts (log)         & $\sim$7$\times$ smaller than DLoc \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{readbox}[The figures tell one story]
+The \textbf{CDFs and heatmaps} prove the small U-Net is as accurate as DLoc (and show \emph{why} the hard
+cases are hard --- multipath and reflections); the \textbf{cross-session bars and CDFs} prove it
+\emph{transfers} to new rooms; and the \textbf{efficiency plots} prove it does all this at a fraction of
+the size and compute.
+\end{readbox}
+
+\end{document}

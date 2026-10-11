@@ -1,0 +1,75 @@
+%% ====================================================================
+%%  A Concept Guide to the DLoc Compression Thesis
+%%  Companion teaching document — E-JUST B.Sc. graduation project
+%%
+%%  Compile:  pdflatex main  ->  pdflatex main   (twice for TOC/refs)
+%%  (or:  latexmk -pdf main.tex).  No bibliography engine needed; the
+%%  guide cites the thesis itself rather than maintaining its own .bib.
+%%
+%%  Each part lives in its own file under chapters/ so the three authors
+%%  can study/own different parts independently.
+%% ====================================================================
+\documentclass[12pt,a4paper,oneside]{report}
+
+\input{preamble}
+
+\begin{document}
+
+%% ---------------- Title page ----------------
+\begin{titlepage}
+\centering
+\vspace*{2.2cm}
+{\scshape\large A Companion Concept Guide to the Thesis\par}
+\vspace{0.4cm}
+{\color{accent}\rule{\linewidth}{1.2pt}}\par
+\vspace{0.8cm}
+{\huge\bfseries Lightweight Knowledge-Distilled\\[0.2em]
+Deep Learning for WiFi Indoor Localization\par}
+\vspace{0.6cm}
+{\Large A Detailed, Concepts-First Study \& Defense Guide\par}
+\vspace{0.3cm}
+{\color{accent}\rule{\linewidth}{1.2pt}}\par
+\vspace{1.4cm}
+
+{\large
+This guide teaches every concept the thesis rests on --- from WiFi channel
+state information to cumulative error distributions --- dissects each model
+architecture and \emph{why} it behaved the way it did, and closes with a
+defense question-and-answer bank.\par}
+\vspace{2.0cm}
+
+{\large\bfseries Authors\par}
+\vspace{0.2cm}
+{\large Abdulrahman Mahmoud Ali Ebrahim \\
+Ahmed Emadeldin Abdelsallam Haggag \\
+Fadwa Yasser Khalil Mahmoud \par}
+\vspace{1.0cm}
+{\large\textbf{Supervisor:} \supervisorname\ \par}
+\vspace{0.2cm}
+{\large Egypt--Japan University of Science and Technology (E-JUST)\par}
+\vfill
+{\large \today\par}
+\end{titlepage}
+
+\pagenumbering{roman}
+\input{chapters/00_how_to_use}
+
+\tableofcontents
+\listoffigures
+\clearpage
+
+%% ---------------- Body ----------------
+\pagenumbering{arabic}
+\input{chapters/01_foundations}
+\input{chapters/02_building_blocks}
+\input{chapters/03_distillation}
+\input{chapters/04_evaluation}
+\input{chapters/05_architectures}
+\input{chapters/06_findings}
+\input{chapters/07_defense_qa}
+
+%% ---------------- Reference matter ----------------
+\appendix
+\input{chapters/08_glossary}
+
+\end{document}

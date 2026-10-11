@@ -1,0 +1,98 @@
+%% ====================================================================
+%%  Chapter 4 — Implementation
+%% ====================================================================
+\chapter{Implementation}
+\label{ch:implementation}
+
+This chapter describes how the proposed methods were implemented. It presents the codebase, together with
+the tools used to precompute the teacher outputs, train the student models, evaluate their robustness,
+test their generalization, and make the experiments repeatable across different random seeds.
+
+\section{Codebase and Training Infrastructure}
+\label{sec:impl:infra}
+
+All of the models were implemented in PyTorch. The codebase is organized as a core package that contains
+the DLoc model generators, a data loader, and evaluation and training utilities; a models package that
+contains the student model classes (MobileNetV2, TinyCNN, MobileNetV2-UNet, and the Mamba variant); and
+an evaluation package that contains the scripts used for benchmarking the models and generating the
+figures in this manuscript.
+
+The models were trained on rented NVIDIA H100 GPUs (Vast.ai). Lighter benchmarking and figure generation
+were carried out on a local NVIDIA RTX 3060 GPU. All of the trained models, training logs, evaluation
+files, and precomputed teacher outputs are archived on the Hugging Face Hub---the model artifacts under
+\texttt{JustAGeek/dloc-code} and the WILD measurement files under the dataset repository
+\texttt{JustAGeek/dloc-wild-fig10b}---so that every reported number can be regenerated from the released
+weights and data.
+
+The code was written to allow for repeatable experiments, and one practical lesson is worth recording.
+The localization error of Equation~\eqref{eq:method:error} is computed as a per-sample loop over the
+predicted and ground-truth locations. In its original implementation, NumPy's threaded backend was
+invoked for each sample; on a 192-core machine this caused the math libraries to spin up their entire
+thread pool for each tiny operation, pinning many cores while doing little useful work. Constraining the
+math libraries to a single thread (via the \texttt{OMP\_NUM\_THREADS} family of environment variables)
+removes this overhead entirely and is required for the evaluation scripts to run at full speed.
+
+\section{Teacher Output Precomputation}
+\label{sec:impl:teacher}
+
+To enable training of the students in distilled mode, the teacher output $y_T$ in
+Equation~\eqref{eq:method:distill} is precomputed for every example in the training and test sets. These
+outputs are cached to disk (approximately 4.09\,GB for the training split and 0.99\,GB for the test
+split). During distilled training, the students are trained to minimize the distance between their
+outputs and these cached teacher outputs, so the teacher model is never invoked during student training.
+This precomputation of the teacher's output is the only change required to make distilled training
+tractable across many students and seeds.
+
+\section{Student Training}
+\label{sec:impl:training}
+
+The convolutional students (MobileNetV2 and TinyCNN) were trained for 50 epochs with the Adam optimizer
+at a learning rate of $10^{-4}$ and a batch size of 64. The MobileNetV2-UNet model was trained for 120
+epochs, also with Adam, under one of two different learning-rate schedules. For the cosine-annealing
+schedule, the learning rate was annealed from its initial value of $10^{-4}$ to zero over the course of
+the 120 epochs. For the step-decay schedule, the learning rate was halved every 20 epochs. The DLoc
+baseline is trained using Adam ($\beta_1 = 0.5$) with a StepLR schedule ($\gamma = 0.9$) whose step sizes are 50, 20, and 50
+epochs for the encoder, location decoder, and offset decoder, respectively. Each model was trained in
+both its standalone and distilled modes; in distilled mode $\alpha$ was set to 0.7 and $\beta$ to 0.3.
+For each student, the checkpoint with the minimum test-set error was selected as the best checkpoint, and
+per-epoch metrics for both the training and test sets were recorded for every training run.
+
+\section{Robustness Test Harness}
+\label{sec:impl:robustness}
+
+Robustness is evaluated by applying signal degradations to the CSI measurements at test time, without
+retraining the models. For each model, the signal is corrupted in six different ways: by dropping the
+signal from one of the four APs (either individually or at random), by adding Gaussian noise of
+$\sigma \in \{0.1, 0.2\}$, by globally attenuating the signal by 50\%, by attenuating the signal from one
+AP to 30\% of its original strength, and by applying Gaussian blur to the CSI signal with a $5 \times 5$
+kernel and $\sigma = 1$. Each model is evaluated under every condition, producing the per-condition
+tables of Section~\ref{sec:res:robustness}.
+
+\section{Cross-Session Leave-One-Session-Out Pipeline}
+\label{sec:impl:crosssession}
+
+The cross-session experiment was performed with the same protocol as the original DLoc
+leave-one-session-out method. Three folds are used, each of which holds out one of the three August
+sessions from the training set and trains on the remaining setups. Within each fold, the MobileNetV2-UNet
+is trained according to its own recipe (Adam at $10^{-4}$ with cosine annealing over 120 epochs) for
+three different random seeds. Scripts automate this process, training the models for the three seeds
+within each fold and aggregating the results from each run into the mean-and-standard-deviation table of
+Section~\ref{sec:res:crosssession}. Unlike the distillation experiments, the DLoc teacher model is not
+retrained on these folds; the results of this experiment are directly comparable to the published results
+of DLoc. Because distillation is performed at training time, it would be necessary to retrain a teacher
+model for each fold, so the models were trained in standalone mode only within these cross-session
+experiments. The purpose of these experiments is therefore to report the performance of the standalone
+MobileNetV2-UNet model.
+
+\section{Multi-Seed and Benchmarking}
+\label{sec:impl:benchmark}
+
+In addition to testing the models for in-distribution accuracy, cross-session accuracy, and robustness,
+the DLoc baseline was trained with three different random seeds to characterize its seed-to-seed
+variance. A separate script measures the computational efficiency of the models: it evaluates each
+model's number of parameters, the number of floating-point operations (FLOPs) it performs on dummy
+inputs, and the latency of its predictions on both CPU and GPU. These results are presented in
+Section~\ref{sec:res:efficiency}. Finally, a figure-generation script regenerates the per-sample error
+arrays of each model from the released checkpoints and the measurement data, and uses them to render the
+cumulative-distribution, compression, cross-session, and qualitative-heatmap figures presented in
+Chapter~\ref{ch:results}, so that the figures are reproducible rather than hand-made.

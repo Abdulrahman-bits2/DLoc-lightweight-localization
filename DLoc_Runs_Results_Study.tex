@@ -1,0 +1,532 @@
+% =====================================================================
+%  DLoc Compression — Defense Study Sheet
+%  Runs, results, epochs, dataset, robot, and findings (all in one place)
+%  Self-contained: compiles on Overleaf with pdfLaTeX.
+% =====================================================================
+\documentclass[11pt]{article}
+
+\usepackage[a4paper,margin=2.2cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{tcolorbox}
+\tcbuselibrary{skins,breakable}
+\usepackage[hidelinks]{hyperref}
+
+% --- simple callout boxes -------------------------------------------
+\newtcolorbox{whybox}[1][Why the result came out this way]{%
+  colback=blue!4, colframe=blue!45!black, fonttitle=\bfseries,
+  title=#1, breakable, left=2mm, right=2mm, top=1mm, bottom=1mm}
+\newtcolorbox{keybox}[1][Key takeaway]{%
+  colback=green!5, colframe=green!45!black, fonttitle=\bfseries,
+  title=#1, breakable, left=2mm, right=2mm, top=1mm, bottom=1mm}
+\newtcolorbox{defbox}[1][Likely defense question]{%
+  colback=orange!6, colframe=orange!55!black, fonttitle=\bfseries,
+  title=#1, breakable, left=2mm, right=2mm, top=1mm, bottom=1mm}
+
+\newcommand{\m}{\,\text{m}}
+
+\title{\textbf{DLoc Compression --- Defense Study Sheet}\\[2mm]
+\large Robot, Dataset, Runs, Epochs, Results, and Why}
+\author{Knowledge Distillation and Compression of DLoc for WiFi Indoor Localization}
+\date{}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\vspace{4mm}
+\hrule
+\vspace{4mm}
+
+% =====================================================================
+\section{The Data-Collection Robot and Ground Truth}
+% =====================================================================
+
+To train DLoc we need pairs of \{the 4 access-point (AP) heatmaps\} $\rightarrow$ \{the true
+location\}. The hard part is getting the \emph{true} location for tens of thousands of points.
+A human labelling each point would be far too slow and imprecise, so an autonomous robot
+labels itself automatically.
+
+\subsection*{The robot}
+A small wheeled robot (a TurtleBot-style platform) carries three things:
+\begin{itemize}[noitemsep]
+  \item \textbf{A WiFi transmitter} --- this is the ``device to be located.'' As the robot drives,
+        the 4 APs in the room receive its packets and record Channel State Information (CSI).
+        \emph{The robot itself is the phone we are pretending to localize.}
+  \item \textbf{A LiDAR sensor} --- a spinning laser measuring the distance to every wall,
+        $360^\circ$, many times per second. This is the key to centimeter-accurate position.
+  \item \textbf{Wheel odometry} --- encoders that count wheel rotations to estimate motion.
+\end{itemize}
+
+\subsection*{SLAM (Simultaneous Localization and Mapping)}
+SLAM solves a chicken-and-egg problem: \emph{localization} (``where am I?'') is easy with a map,
+and \emph{mapping} is easy if you know where you are --- SLAM does \textbf{both at once} starting
+with neither. The robot takes a LiDAR scan, rolls forward, takes another scan, and
+\textbf{lines the two up} (``scan matching'') to estimate how far it moved; it stitches all scans
+into a growing map, and uses \textbf{loop closure} (recognizing a previously-seen place) to erase
+the small errors (``drift'') that accumulate. The result is a centimeter-accurate position on a
+floor map.
+
+\begin{keybox}[Why LiDAR is the ``ground truth'']
+LiDAR localization is accurate to \emph{centimeters} and is \emph{independent of WiFi}, so it can
+serve as a trustworthy answer key that the WiFi model is trained against. WiFi localization is
+what we are trying to \emph{learn}; LiDAR is what we \emph{grade against}.
+\end{keybox}
+
+\subsection*{MapFind --- the automated collection-and-labelling platform}
+\textbf{MapFind} is the automated system that ties everything together so the dataset labels itself:
+\begin{enumerate}[noitemsep]
+  \item the robot drives around the space;
+  \item SLAM gives its exact $(x,y)$ at every instant;
+  \item at that same instant the 4 APs record CSI;
+  \item MapFind pairs them: $\{4~\text{AP heatmaps}\} \leftrightarrow \{\text{SLAM }(x,y)\}$ = one
+        labelled training example.
+\end{enumerate}
+That SLAM $(x,y)$ is exactly what becomes the Gaussian-bump target heatmap. Driving the robot on
+different days / layouts produces different \textbf{sessions} (the basis of the cross-session study).
+
+% =====================================================================
+\section{The WILD Dataset}
+% =====================================================================
+
+\subsection*{Input and output representation}
+\textbf{Input.} The phone transmits \emph{once}; all 4 APs hear it \emph{simultaneously} (four
+listeners, not four transmissions). Each AP turns its CSI into a 2D heatmap over (Angle-of-Arrival,
+Time-of-Flight), then converts it (polar$\to$Cartesian) onto the floor plan. The 4 resulting
+pictures are stacked into a \textbf{4-channel image} (like RGB but 4 APs), shape
+$4 \times 161 \times 361$, all in the same floor coordinates.
+
+\textbf{Output.} A \textbf{single-channel} heatmap of the same size, containing one soft
+\textbf{Gaussian bump} whose center is the predicted location, at \textbf{0.1\,m per pixel}
+($161\times361$ pixels $\approx 16\,\text{m}\times36\,\text{m}$).
+
+\begin{keybox}[Why a heatmap instead of $(x,y)$ coordinates]
+A soft bump is (1) easier and more stable to train than a single-pixel target, (2) encodes
+confidence (tight bump = sure, wide = unsure), and (3) lets us use image-to-image translation
+networks (CNNs / U-Nets). This turns ``find the phone'' into ``translate this image into that
+image.''
+\end{keybox}
+
+\subsection*{Multipath --- why a single AP is unreliable}
+In a clear line of sight, each AP sees one clean blob at the true spot. But \textbf{reflections}
+(echoes off walls/furniture/metal) create \emph{extra fake blobs} at wrong angles/distances, and
+\textbf{obstacles} can dim the true blob so a reflected (wrong) blob dominates. This is the
+\textbf{multipath / non-line-of-sight (NLOS)} problem. It is why DLoc fuses \textbf{4 APs} (each is
+blocked/reflected differently, so together they recover the truth) and \emph{learns} to ignore
+echoes, rather than just picking the brightest pixel.
+
+\subsection*{The five sessions, their environments, and exact sample counts}
+All data is from the same building (Jacobs Hall), same 4 APs, same $161\times361$ grid. Sessions
+differ only in (a) time passed and (b) what objects were in the room. The counts below were read
+directly from the dataset files (the last array axis $N$ is the sample count).
+
+\begin{table}[h]
+\centering
+\footnotesize
+\begin{tabular}{@{}clrl@{}}
+\toprule
+\textbf{Session} & \textbf{Tag} & \textbf{Samples} & \textbf{Environment / role} \\
+\midrule
+1 & \texttt{jacobs\_July28}        & 7{,}635  & base/reference --- all used for training \\
+2 & \texttt{jacobs\_July28\_2}     & 14{,}199 & same env, $\sim$1\,h later --- split train+test (below) \\
+3 & \texttt{jacobs\_Aug16\_1}      & 11{,}201 & $\sim$19 days later, \textbf{furniture rearranged} \\
+4 & \texttt{jacobs\_Aug16\_3}      & 8{,}754  & \textbf{different furniture} arrangement \\
+5 & \texttt{jacobs\_Aug16\_4\_ref} & 5{,}486  & \textbf{aluminum reflector added} (hardest) \\
+\midrule
+\multicolumn{2}{@{}l}{\textbf{Total}} & \textbf{47{,}275} & \\
+\bottomrule
+\end{tabular}
+\caption{Exact per-session sample counts (verified from the \texttt{.mat} files).}
+\end{table}
+
+\noindent\textbf{How Session~2 splits, and where 17{,}574 / 4{,}260 come from:}
+\begin{table}[h]
+\centering
+\footnotesize
+\begin{tabular}{@{}lrl@{}}
+\toprule
+\textbf{Part} & \textbf{Samples} & \textbf{Role} \\
+\midrule
+Session~1 (\texttt{July28})                       & 7{,}635 & training \\
+Session~2 \texttt{fov\_train} (line-of-sight)     & 588     & training \\
+Session~2 \texttt{non\_fov\_train} (NLOS)         & 9{,}351 & training \\
+\midrule
+\textbf{Total training}                           & \textbf{17{,}574} & \\
+\midrule
+Session~2 \texttt{fov\_test}                       & 252     & in-distribution test \\
+Session~2 \texttt{non\_fov\_test}                  & 4{,}008 & in-distribution test \\
+\midrule
+\textbf{Total in-distribution test}               & \textbf{4{,}260} & \\
+\bottomrule
+\end{tabular}
+\caption{The reported 17{,}574 / 4{,}260 numbers, derived from real per-file counts.}
+\end{table}
+
+\begin{keybox}[A useful detail]
+The data is overwhelmingly \textbf{non-line-of-sight}: in Session~2 only $588+252 = 840$ samples are
+FOV (line-of-sight) vs $9{,}351 + 4{,}008 = 13{,}359$ NLOS ($\sim$94\%). The hard, realistic indoor
+case (blocked, multipath) is most of what the model trains and is tested on.
+\end{keybox}
+
+% =====================================================================
+\section{Data Splits (and why each exists)}
+% =====================================================================
+
+The same 5 sessions are \emph{re-sliced} for each experiment into ``what we learn from'' vs ``what we
+are graded on.'' Only the test environment's similarity to training changes.
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{In-distribution} --- train on the 17{,}574 July samples, test on the held-out 4{,}260
+        July samples. \emph{Same environment.} Measures \textbf{best-case accuracy} (``can it learn?'').
+  \item \textbf{Cross-session, leave-one-session-out (LOSO)} --- 3 folds; each fold trains on July plus
+        \emph{two} of the three August sessions and tests on the \emph{held-out} August session
+        (a changed environment). \emph{Same protocol as the original DLoc paper}, so the comparison is
+        fair. Measures \textbf{generalization / transfer} (``does it transfer?'').
+  \item \textbf{Zero-shot cross-session} --- train on July \emph{only}, test on August (never seen any
+        August). The harshest domain shift; used as an \textbf{ablation bench}, not the DLoc comparison.
+\end{itemize}
+
+\begin{keybox}[``Transfer'' vs ``ablation'' in one line]
+\textbf{Transfer} = does what the model learned in July still work in a changed August room
+(generalization, not memorization)? \quad \textbf{Ablation} = remove/toggle \emph{one} ingredient
+(distillation, skip connections, capacity) to measure its exact contribution.
+\end{keybox}
+
+% =====================================================================
+\section{The Models}
+% =====================================================================
+
+\begin{table}[h]
+\centering
+\footnotesize
+\begin{tabular}{@{}llrl@{}}
+\toprule
+\textbf{Model} & \textbf{Role} & \textbf{Params} & \textbf{Idea} \\
+\midrule
+DLoc baseline       & teacher  & 16.5M & encoder + location decoder + consistency/offset decoder \\
+MobileNetV2         & student  & 2.3M  & depthwise-separable convolutions (cheap convs) \\
+MobileNetV2-UNet    & student  & 2.41M & MobileNetV2 encoder + U-Net \textbf{skip connections} \\
+TinyCNN             & student  & 47K   & minimal CNN (capacity floor probe) \\
+Mamba               & student  & 0.65M & state-space (1D-sequence) model \\
+\bottomrule
+\end{tabular}
+\caption{The teacher and the four student architectures.}
+\end{table}
+
+\noindent The DLoc \textbf{consistency / offset decoder} produces ``corrected'' (clean) per-AP
+heatmaps with multipath removed; it is an auxiliary task that forces the encoder to learn real-vs-echo
+features. In the code it is the \texttt{offset\_decoder} (it maps \texttt{features\_w\_offset}
+$\to$ \texttt{features\_wo\_offset}). Most students keep only the \emph{location} path, which is part
+of why they are so much smaller.
+
+% =====================================================================
+\section{Knowledge Distillation: ``distill'' vs ``standalone''}
+% =====================================================================
+
+\textbf{Standalone} = train the student normally, learning only from the ground truth.
+\textbf{Distill} = train the student to \emph{also imitate the big DLoc teacher}. The difference
+between the two is a single term in the loss --- and that toggle is the distillation ablation.
+
+\subsection*{The loss}
+Every student in \textbf{distill} mode minimizes a blended loss:
+\[
+  L \;=\; \underbrace{0.7 \times \mathrm{MSE}\!\left(\hat{y},\, y_{\text{true}}\right)}_{\text{match the truth }(\alpha=0.7)}
+      \;+\; \underbrace{0.3 \times \mathrm{MSE}\!\left(\hat{y},\, y_{\text{teacher}}\right)}_{\text{match the teacher }(\beta=0.3)}
+\]
+where $\hat{y}$ is the student's heatmap, $y_{\text{true}}$ is the sharp ground-truth Gaussian bump,
+and $y_{\text{teacher}}$ is the heatmap that DLoc predicted for the same input. In \textbf{standalone}
+mode $\beta = 0$ (the second term disappears).
+
+\subsection*{Why imitate the teacher? --- soft targets / ``dark knowledge''}
+The ground truth is a perfectly sharp dot, but the teacher's output is a \emph{softer, more realistic}
+blob that encodes the teacher's learned spatial uncertainty (``probably here, maybe slightly there'').
+That extra structure --- ``dark knowledge'' --- is information the hard label cannot give. Because the
+teacher's blob is softer, training on it \textbf{smooths the targets} (the thesis calls this
+\textbf{spatial label smoothing}), which \textbf{regularizes} the student into a smoother, more stable
+model.
+
+\subsection*{The precompute trick}
+Running the 16.5M teacher on every batch would be wasteful (it never changes), so the teacher is run
+\emph{once} over the whole dataset and its outputs are cached to disk (\textbf{4.09\,GB} train,
+\textbf{0.99\,GB} test, via \texttt{precompute\_teacher.py}). During student training, $y_{\text{teacher}}$
+is just read from disk --- the teacher is never invoked again. This is what made distillation practical
+across many students and seeds.
+
+\begin{keybox}[Two crucial distillation findings]
+\textbf{(1) Capacity threshold ($\sim$2M params).} Distillation \emph{helps} models with spare capacity
+(MobileNetV2, U-Net) but \emph{harms} TinyCNN (47K) --- a model already overwhelmed by the ground truth
+cannot absorb the teacher's extra knowledge.\\[1mm]
+\textbf{(2) It mainly helps robustness, not clean accuracy.} On clean in-distribution data the student
+already nails the answer, so distillation barely moves accuracy; but the smoother representation pays
+off under noise --- a \textbf{3.4$\times$} robustness gain.
+\end{keybox}
+
+% =====================================================================
+\section{The Runs / Experiments (purpose, split, epochs, results, why)}
+% =====================================================================
+
+All training used the \textbf{Adam} optimizer, default \textbf{batch size 64} (Mamba: 32). Hyperparameters
+are summarized in Table~\ref{tab:hparams}. ``\textbf{0 epochs}'' means the experiment \emph{reuses}
+already-trained weights and trains nothing new.
+
+% ---------------------------------------------------------------
+\subsection{Experiment 1 --- In-distribution accuracy}
+\textbf{In simple words:} train each model in the July room, test it in the same July room --- can a
+small model match big DLoc when nothing changes?
+
+\textbf{Purpose:} best-case accuracy; which lightweight models can learn the mapping at all.\\
+\textbf{Train split:} 17{,}574 July. \quad \textbf{Test split:} held-out 4{,}260 July (same env).
+
+\begin{table}[h]
+\centering
+\footnotesize
+\begin{tabular}{@{}llrrl@{}}
+\toprule
+\textbf{Model} & \textbf{Mode} & \textbf{Epochs} & \textbf{Median (m)} & \textbf{Notes} \\
+\midrule
+DLoc baseline (16.5M) & standalone & 50 & 0.707 & reference (StepLR, steps 50/20/50) \\
+MobileNetV2 (2.3M)    & std + distill & 50 & 0.707 & \textbf{ties DLoc at 7.2$\times$ smaller} \\
+TinyCNN (47K)         & std + distill & 50 & 3.92 & below the capacity floor \\
+MobileNetV2-UNet (2.41M) & std + distill & 120 & \textbf{0.640} & \textbf{beats DLoc at 6.8$\times$ smaller} \\
+Mamba (0.65M)         & standalone & diverged ep.\ 1 & 10.56 & P90 20.0, P99 28.3 \\
+\bottomrule
+\end{tabular}
+\caption{In-distribution median error. U-Net trains 120 epochs; the convolutional models 50.}
+\end{table}
+
+\begin{whybox}
+\textbf{MobileNetV2 ties DLoc} $\Rightarrow$ DLoc is over-parameterized; 2.3M params suffice, and
+depthwise-separable convs learn the mapping efficiently.\\
+\textbf{U-Net beats DLoc} $\Rightarrow$ skip connections carry fine spatial detail straight to the
+decoder (no lossy bottleneck) $\Rightarrow$ a sharper bump $\Rightarrow$ tighter localization; the
+extra 120 epochs let it fully converge.\\
+\textbf{TinyCNN fails} $\Rightarrow$ 47K params is below the $\sim$2M capacity floor; it cannot
+represent a function this complex.\\
+\textbf{Mamba fails} $\Rightarrow$ it is a 1D-sequence model on a 2D-spatial problem; flattening the
+heatmaps destroys spatial locality, so it diverges after the first epoch (architecture mismatch, not
+under-training).
+\end{whybox}
+
+% ---------------------------------------------------------------
+\subsection{Experiment 2 --- Robustness}
+\textbf{In simple words:} feed the already-trained models broken signals --- drop an AP, add noise,
+dim, blur --- and see who holds up.
+
+\textbf{Purpose:} measure graceful degradation; discover \emph{what design choices cause robustness}.\\
+\textbf{Train split:} none. \quad \textbf{Test split:} the 4{,}260 July test samples, \textbf{corrupted}.
+\quad \textbf{Epochs: 0} (reuses Experiment~1 weights).
+
+\textbf{Corruptions applied at test time:} drop one of the 4 APs (individually or at random); add
+Gaussian noise $\sigma\in\{0.1,0.2\}$; globally attenuate the signal by 50\%; attenuate one AP to 30\%;
+apply a $5\times5$ Gaussian blur ($\sigma=1$).
+
+\textbf{Headline results:} distillation $\to$ \textbf{3.4$\times$} more noise-robust (MobileNetV2 at
+$\sigma=0.1$: $\sim$16.4\,m standalone $\to$ $\sim$4.8\,m distilled); skip connections $\to$
+\textbf{5.5$\times$}; distillation \emph{harms} TinyCNN; the two effects are complementary, not additive.
+
+\begin{whybox}
+\textbf{Distillation helps} $\Rightarrow$ soft teacher targets smooth the representation, so noise
+perturbs it less (needs capacity to absorb the teacher).\\
+\textbf{Distillation harms TinyCNN} $\Rightarrow$ 47K params cannot absorb the teacher's extra knowledge;
+the added objective overloads an already-struggling model.\\
+\textbf{Skips help} $\Rightarrow$ when noise corrupts the deep bottleneck, clean shallow features bypass
+it through the skip connections --- a second good-information path.\\
+\textbf{Complementary, not additive} $\Rightarrow$ they fix robustness by different mechanisms
+(smoothing vs.\ bypassing the bottleneck), so they do not simply sum.
+\end{whybox}
+
+% ---------------------------------------------------------------
+\subsection{Experiment 3 --- Cross-session (LOSO) --- the headline}
+\textbf{In simple words:} train in July plus two August days, test on a third August day never seen ---
+does it transfer, and how does it compare to DLoc fairly?
+
+\textbf{Purpose:} generalization (transfer); the fair apples-to-apples DLoc comparison.\\
+\textbf{Train split (per fold):} July + two of three August sessions. \quad
+\textbf{Test split:} the held-out August session (whole session).\\
+\textbf{Model:} U-Net \emph{standalone}. \quad \textbf{Epochs: 120 per run}; 3 folds $\times$ 3 seeds
+$=$ \textbf{9 runs}.
+
+\begin{table}[h]
+\centering
+\footnotesize
+\begin{tabular}{@{}llrrrrr@{}}
+\toprule
+\textbf{Held-out test} & \textbf{Condition} & \textbf{Test $N$} &
+\textbf{Med.\ (ours)} & \textbf{Med.\ (DLoc)} & \textbf{P90 (ours)} & \textbf{P90 (DLoc)} \\
+\midrule
+\texttt{Aug16\_1}     & furniture      & 11{,}201 & $0.852\pm0.044$ & 0.71 & $1.839\pm0.067$ & 1.71 \\
+\texttt{Aug16\_3}     & diff.\ furn.   & 8{,}754  & $0.822\pm0.040$ & 0.82 & $2.793\pm0.140$ & 2.52 \\
+\texttt{Aug16\_4\_ref}& reflector      & 5{,}486  & $1.116\pm0.016$ & 1.05 & $2.489\pm0.030$ & 2.77 \\
+\midrule
+\textbf{Mean}         &                &          & \textbf{0.930}  & \textbf{0.86} & & \\
+\bottomrule
+\end{tabular}
+\caption{Leave-one-session-out vs.\ published DLoc (mean$\pm$std over 3 seeds). Our U-Net uses 2.41M
+params vs.\ DLoc's 16.5M.}
+\end{table}
+
+\begin{whybox}
+\textbf{Worse than in-distribution (0.930 vs 0.640)} $\Rightarrow$ a new environment is a domain shift;
+some July-specific multipath patterns do not transfer.\\
+\textbf{Reflector fold worst (1.116)} $\Rightarrow$ an aluminum sheet is an almost ideal WiFi mirror; it
+injects the strongest fake-multipath blobs.\\
+\textbf{Ties DLoc on \texttt{Aug16\_3}, within $\sim$0.1\,m elsewhere} $\Rightarrow$ the U-Net's skip
+connections produce robust, generalizable features, so it transfers nearly as well as a network
+6.8$\times$ its size.\\
+\textbf{Error order tracks environmental severity} (furniture $<$ furniture $<$ reflector) $\Rightarrow$
+the numbers follow the physics, not chance.
+\end{whybox}
+
+\begin{defbox}
+``What is the difference between your 0.640\,m and 0.930\,m numbers?'' --- 0.640 is \emph{in-distribution}
+(same session, optimistic); 0.930 is \emph{cross-session LOSO} (held-out environment, honest). Know
+which is which cold.
+\end{defbox}
+
+% ---------------------------------------------------------------
+\subsection{Experiment 4 --- Zero-shot cross-session}
+\textbf{In simple words:} train in July only, test in August with zero August exposure --- the harshest
+test, used as an ablation bench.
+
+\textbf{Purpose:} isolate architecture/distillation effects under extreme domain shift (\emph{not} the
+DLoc comparison).\\
+\textbf{Train split:} July only. \quad \textbf{Test split:} August (entirely unseen). \quad
+\textbf{Epochs: 0} (reuses in-distribution weights).
+
+\begin{whybox}
+Errors are higher than LOSO (no August seen at all), and the gaps between architectures \emph{widen},
+making each design choice's contribution easy to read --- which is exactly why this setting is used for
+ablation rather than for the headline comparison.
+\end{whybox}
+
+% ---------------------------------------------------------------
+\subsection{Experiment 5 --- Multi-seed baseline}
+\textbf{In simple words:} train the DLoc baseline three separate times with different seeds --- how much
+does the score wobble?
+
+\textbf{Purpose:} report the baseline's run-to-run stability so single-run comparisons are honest.\\
+\textbf{Train/test split:} the in-distribution split (17{,}574 / 4{,}260). \quad
+\textbf{Seeds:} 42, 123, 777. \quad \textbf{Epochs: 120 per run} $\times$ 3.
+
+\textbf{Result:} $0.875 \pm 0.036\m$ (vs.\ the favorable single run of 0.707\,m).
+
+\begin{whybox}
+The baseline's StepLR ($\gamma=0.9$) never anneals the learning rate to zero, so even at 120 epochs the
+final weights depend on the seed $\Rightarrow$ run-to-run variance. The 0.707\,m headline was a lucky
+single seed; the honest expectation is $\sim$0.875\,m --- which is why the U-Net's 0.640\,m advantage is
+real (it beats even the favorable baseline run).
+\end{whybox}
+
+% ---------------------------------------------------------------
+\subsection{Experiment 6 --- Efficiency}
+\textbf{In simple words:} ignore accuracy --- how heavy and slow is each model?
+
+\textbf{Purpose:} quantify the compression payoff (the project's whole point).\\
+\textbf{Split:} none --- runs dummy inputs of the right shape. \quad \textbf{Epochs: 0}.
+
+\begin{table}[h]
+\centering
+\footnotesize
+\begin{tabular}{@{}lrrrl@{}}
+\toprule
+\textbf{Model} & \textbf{Params} & \textbf{FLOPs} & \textbf{CPU latency} & \textbf{vs DLoc} \\
+\midrule
+DLoc baseline    & 16.5M & 81.06\,G & 270.9\,ms & --- \\
+MobileNetV2-UNet & 2.41M & 1.45\,G  & 27.2\,ms  & 6.8$\times$ params, 56$\times$ FLOPs, 10$\times$ CPU \\
+MobileNetV2      & 2.3M  & ---      & ---       & 7.2$\times$ fewer params \\
+TinyCNN          & 47K   & ---      & ---       & 351$\times$ fewer params \\
+\bottomrule
+\end{tabular}
+\caption{Efficiency. The FLOP reduction (56$\times$) exceeds the parameter reduction (6.8$\times$).}
+\end{table}
+
+\begin{whybox}
+Depthwise-separable convolutions replace DLoc's full convolutions, so the FLOP drop (56$\times$) exceeds
+even the parameter drop (6.8$\times$); fewer FLOPs $\Rightarrow$ faster CPU inference $\Rightarrow$
+realistic edge deployment.
+\end{whybox}
+
+% =====================================================================
+\section{Everything in One Table}
+% =====================================================================
+
+\begin{table}[h]
+\centering
+\footnotesize
+\begin{tabular}{@{}clllll@{}}
+\toprule
+\textbf{\#} & \textbf{Experiment} & \textbf{Model} & \textbf{Split (train $\to$ test)} & \textbf{Epochs} & \textbf{Result} \\
+\midrule
+1 & In-distribution     & all 5 archs       & July 17{,}574 $\to$ July 4{,}260       & 50 (U-Net 120) & U-Net 0.640\,m \\
+2 & Robustness          & 6 models          & --- $\to$ July 4{,}260 corrupted       & 0 (reuse)      & distill 3.4$\times$, skips 5.5$\times$ \\
+3 & Cross-session LOSO  & U-Net standalone  & July\,+\,2 Aug $\to$ held-out Aug       & 120 $\times$ 9 & \textbf{0.930\,m} vs 0.86 \\
+4 & Zero-shot           & in-dist models    & July only $\to$ Aug (unseen)           & 0 (reuse)      & ablation \\
+5 & Multi-seed baseline & DLoc baseline     & July 17{,}574 $\to$ July 4{,}260        & 120 $\times$ 3 & $0.875\pm0.036$\,m \\
+6 & Efficiency          & all               & --- $\to$ dummy inputs                  & 0              & 56$\times$ FLOPs, 10$\times$ CPU \\
+\bottomrule
+\end{tabular}
+\caption{All six experiments at a glance.}
+\end{table}
+
+% =====================================================================
+\section{Hyperparameters}
+% =====================================================================
+
+\begin{table}[h]
+\centering
+\footnotesize
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Setting} & \textbf{Value} \\
+\midrule
+Optimizer                 & Adam (all models) \\
+DLoc baseline             & lr $10^{-5}$, $\beta_1 = 0.5$, StepLR $\gamma=0.9$ (steps 50/20/50) \\
+Students (MobileNet/TinyCNN) & lr $10^{-4}$, 50 epochs \\
+MobileNetV2-UNet          & lr $10^{-4}$, 120 epochs; cosine (anneal to 0) or step (halve every 20) \\
+Batch size                & 64 (Mamba: 32) \\
+Distillation weights      & $\alpha = 0.7$ (truth), $\beta = 0.3$ (teacher) \\
+Seeds (where multi-seed)  & 42, 123, 777 \\
+Teacher cache             & 4.09\,GB train, 0.99\,GB test (\texttt{precompute\_teacher.py}) \\
+\bottomrule
+\end{tabular}
+\caption{Training hyperparameters.}
+\label{tab:hparams}
+\end{table}
+
+% =====================================================================
+\section{Key Findings}
+% =====================================================================
+
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{MobileNetV2 matches DLoc} (0.707\,m) at 7.2$\times$ fewer params --- DLoc is
+        over-parameterized for in-distribution modelling.
+  \item \textbf{MobileNetV2-UNet beats DLoc} (0.640 vs 0.707\,m) at 6.8$\times$ fewer params --- skip
+        connections preserve fine spatial detail.
+  \item \textbf{There is a capacity floor ($\sim$2M params).} TinyCNN (47K) cannot learn the mapping
+        (3.92\,m).
+  \item \textbf{Architecture must match the data.} Mamba (1D-sequence) fails on a 2D-spatial problem
+        (10.56\,m).
+  \item \textbf{Distillation buys robustness, not accuracy} --- 3.4$\times$ under Gaussian noise --- and
+        \emph{only above the capacity threshold} (it harms TinyCNN).
+  \item \textbf{Skip connections buy robustness} --- 5.5$\times$ --- by routing clean shallow features
+        around the noisy bottleneck.
+  \item \textbf{The two robustness mechanisms are complementary, not additive.}
+  \item \textbf{The compressed U-Net transfers} --- 0.930\,m cross-session (LOSO) vs DLoc's 0.86\,m,
+        matching DLoc on one fold, at 6.8$\times$ compression.
+  \item \textbf{It is far cheaper} --- 56$\times$ fewer FLOPs and 10$\times$ faster on CPU.
+  \item \textbf{Honest reporting.} The baseline varies seed-to-seed ($0.875\pm0.036$\,m); and the median
+        error is quantized to a $0.1\sqrt{n}$ pixel lattice, so results within $\sim$0.1\,m are
+        effectively equal --- report mean / CDF / P90, not the median alone.
+\end{enumerate}
+
+\begin{keybox}[The whole thesis in one sentence]
+We compress DLoc 6.8$\times$ and find the small U-Net is as accurate (0.640\,m), as transferable
+(0.930\,m cross-session), and far cheaper (56$\times$ fewer FLOPs) --- and, more importantly, that
+\emph{distillation} and \emph{skip connections} each buy measurable robustness, with distillation only
+working above a capacity floor.
+\end{keybox}
+
+\end{document}

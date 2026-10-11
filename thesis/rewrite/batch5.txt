@@ -1,0 +1,76 @@
+============================================================
+DLoc THESIS - REWRITE BATCH 5 of 5
+
+Chapter 5 (5.5-5.7) + Chapter 6 (Conclusion) + Chapter 7 (Future Work) + Appendix prose
+
+Rewrite in your voice - keep section headings and [cite: X] markers as they are. Tables/figures as they appear in .tex files.
+
+5.5 Multi-Seed Statistical Validation
+
+In order to confirm that the differences in performance between the baseline and the student models are not the result of random initializations of the models’ parameters, we also trained the baseline model under three different random seeds (see Table 5.9).
+
+The median location error varied by only +/- 0.036 m between the three randomly-initialized models (coeff. of variation 4.1%), indicating that the reported in-distribution accuracy for the baseline is representative of the model’s performance in general. P99, however, varied by +/- 6.832 m (CV 52%), which is due to the fact that P99 calculations depend upon a small number of locations that are inherently ambiguous; the baseline model’s accuracy at these locations varied between seeds. Furthermore, the U-Net’s median accuracy of 0.640 m is 6.5 standard deviations away from the mean accuracy of the baseline (0.875 m), indicating the significance of the accuracy improvement that results from the architectural change from DLoc to the U-Net.
+
+5.6 Computational Efficiency
+
+The deployment cost of each model is reported in Table 5.10: the number of parameters of each model, the number of floating-point operations that are required to run the model (with dummy inputs of batch size of one), and the inference times of the model when run on both CPU and GPU platforms. Furthermore, Figures 5.6 and 5.7 show the accuracy of the models in relation to the size of the model (in terms of number of parameters), and the number of parameters of each model.
+
+The MobileNetV2-UNet model achieves an accuracy of 0.640 m with only 1.45 GFLOPs and 27.2 ms of CPU inference time latency, compared to the baseline model of DLoc, which has 81.06 GFLOPs and 270.9 ms of CPU inference time latency. Thus, the MobileNetV2-UNet reduces computational costs by a factor of 56, and improves the CPU inference time by a factor of 10 - the most representative platform for the deployment of such models at the edge of the network. Furthermore, the U-Net model is also 3.6x faster on the GPU compared to the DLoc model. Thus, the accuracy improvement that is achieved by the MobileNetV2-UNet is not gained at the expense of increased computational costs relative to those of the teacher model of DLoc.
+
+5.7 Discussion
+
+The dual nature of knowledge distillation. Knowledge distillation in this task differs from that in model applications such as classification models. In the spatially-localization task, teacher outputs are inherently uncertain about specific locations and instead provide a heatmap of possible locations of the object of interest. Thus, the baseline model’s use of noise smoothing provides no benefit within the in-distribution case, but is beneficial in cases of noise, and in the generalization to cross-session folds, but harmful to the smallest model size (TinyCNN). Thus, the knowledge distillation signal provides two seemingly-opposite effects upon the different capacities of the student models.
+
+Two complementary robustness mechanisms. The two methods of robustness provided by the MobileNetV2-UNet model are complementary rather than additive to one another. Thus, one might expect diminishing returns or even negative returns to the combination of the robustness provided by the architectural element (skip connections) of the model and the training-based robustness signal of knowledge distillation. Thus, an understanding of which type of corruption to expect is required to choose which type of robustness will be most beneficial, with the skip connections to protect against high noise environments and the knowledge distillation to protect against failures of multiple access points.
+
+Practical recommendation. In general, then, the distilled MobileNetV2-UNet outperforms other models in each category: it achieves an in-distribution accuracy of 0.640 m, it achieves competitive cross-session accuracy while being only 6.8x in size relative to DLoc, it exhibits the best results in the case of multi-AP dropout, and its computational costs are 56x lower than those of the DLoc model. Furthermore, if noise robustness is the main concern, then the standalone U-Net may be preferred. If model compression is the main concern, then the distilled plain MobileNetV2 achieves an accuracy of 0.707 m while having only 2.3M parameters. Thus, in each case, the MobileNetV2-UNet and its variants are roughly an order of magnitude smaller than DLoc yet achieve the same accuracy - the main point of this thesis.
+
+============================================================\
+
+CHAPTER 6 - CONCLUSION
+
+This thesis investigated whether the computational cost of DLoc was inherent to the task of localizing devices via WiFi signals, or whether it represented over-parameterization of the model that could be removed via model distillation or architectural alterations. The model was compressed into a family of models of various sizes, both trained independently of DLoc and distilled from the DLoc model, and evaluated along five dimensions: in-distribution accuracy, robustness, cross-session accuracy, statistical validation, and computational costs. Results of these evaluations lead to the following six findings.
+
+First, it is possible to create a model that is extremely small relative to DLoc but still achieves the same in-distribution accuracy; the MobileNetV2 model that has only 2.3 million parameters achieves an accuracy of 0.707 m - a 7.2x reduction in model size.
+
+Second, the inclusion of skip connections into the MobileNetV2 model allows the resulting model to achieve accuracy that is better than that of the DLoc model baseline. Accuracy of 0.640 m is achieved with the MobileNetV2-UNet with 2.41 million parameters, a 9.5% improvement over the accuracy of DLoc, with a model that is only 6.8x in size relative to DLoc.
+
+Third, knowledge distillation acts as a method of increasing the robustness of the student model rather than its accuracy. Results show that accuracy is the same within DLoc and its distilled counterparts during normal in-distribution cases, but distilled models show improvements to accuracy in the presence of noise (3.4x improvement), and generalization to cross-session test folds.
+
+Fourth, there is a minimum size for the student model to utilize knowledge distillation. At a size of around 2 million parameters is reached with the MobileNetV2-UNet, but at 1.1 million parameters with the TinyCNN model, utilizing knowledge distillation leads to a degradation in the accuracy of the student models in cases of AP dropout.
+
+Fifth, the methods of increasing the robustness of the model are not additive between the two methods. Thus, while both the use of skip connections and the use of knowledge distillation increase the robustness of the MobileNetV2-UNet model, each method provides benefits to different types of corruption of the input signals; the skip connections provide 5.5x robustness to noise, while knowledge distillation provides 3.4x robustness to the failure of any of the access points to function. Thus, the two methods are complementary rather than additive to one another.
+
+Sixth, the cross-session accuracy of the MobileNetV2-UNet model is competitive relative to the cost of the model. Using the same leave-one-session-out method as DLoc used in its training data with three different seeds, the MobileNetV2-UNet model achieves in-distribution accuracies of 0.852 m, 0.822 m, and 1.116 m for three different sessions held out of the training data in August, averaging to 0.930 m - matching the accuracy of DLoc (0.86 m) for the different-furniture fold, and maintaining its accuracy on the P90 fold, yet at only 6.8x in size relative to DLOC.
+
+These findings indicate that it is possible to achieve accurate WiFi-based localization by utilizing both the architectural design of the MobileNetV2-UNet (with skip connections) and the training strategy of knowledge distillation. Each method resolves a different limitation of the other; the skip connections resolve the problem of information loss that limits the spatial accuracy of the model, while the knowledge distillation helps the model to generalize across distribution shifts in the WiFi signal strength. Furthermore, the distilled MobileNetV2-UNet model achieves an in-distribution accuracy of 0.640 m, attains competitive cross-session accuracy, exhibits the best results in the case of multiple AP failures, and requires 56x fewer floating-point operations to be performed to locally deploy the model relative to DLoc, as well as requires 10x less CPU inference time. Thus, the cost of DLoc is not inherent to WiFi-based localization; instead, a model that is at least an order of magnitude smaller than DLoc can meet or exceed its accuracy, supporting its use in the edge devices from which WiFi-based indoor localization will be most useful.
+
+============================================================\
+
+CHAPTER 7 - FUTURE WORK
+
+Beyond the results that are presented in this thesis, there are several directions for future work on this project.
+
+Deploying the model on E-JUST’s edge devices. The most immediate future step in this project is to deploy the MobileNetV2-UNet model on edge devices on the E-JUST campus. While the computational costs of the model are reported in this thesis, as are its accuracy results, the model has yet to be deployed on any device. Furthermore, since the inference time of the MobileNetV2-UNet on a CPU is 27.2 ms compared to DLoc’s 270.9 ms, the MobileNetV2-UNet is a candidate for deployment on edge devices.
+
+Creating a new localization dataset on E-JUST’s campus. The model was trained and evaluated upon the WILD dataset, which exists in only one building on campus: Jacobs Hall. A new dataset could be created at E-JUST that contains CSI measurements taken in a different building on the campus. Such a dataset would allow the results of this thesis to be evaluated for their transferability to a new WiFi environment.
+
+Statistical validation of the student models. The statistical validation of the baseline model is presented in this thesis. Validation of the student models under multiple random seeds was de-scoped for this thesis due to the computational cost of training those models. Thus, the student models could be trained under several different random seeds to provide significance testing of the comparisons of the students to the baseline model.
+
+Applying corruption augmentation during training. The robustness of the models was tested by applying different types of corruptions to the model only during the testing phase. If these types of corruptions were also applied during the training of the models, it is likely that the robustness of the models would increase, which would be beneficial in the case that such robustness was required in the environments where the models would be deployed.
+
+Exploring other architectures. The architecture of the MobileNetV2-UNet model was explored in this research. More exploration of other architectures, such as models that utilize Mamba layers or attention mechanisms to the skip connections, could reveal additional benefits to the student models.
+
+============================================================\
+
+APPENDIX A - SUPPLEMENTARY RESULTS
+
+(appendix intro) Supplementary results include tables and figures that are presented in this thesis in summary form. Full tables of results for all models are presented in Section A.1, tables of cross-session accuracies in Section A.2, training parameters in Section A.3, and additional qualitative results in Section A.4.
+
+A.1 Full tables of robustness accuracy results. Tables A.1-A.3 contain the accuracy results for each model under each of the nine corruption conditions. The table for each model includes the median, P90, P99, and mean error in meters.
+
+A.2 Cross-session accuracy tables. Table A.4 contains the accuracy of each model for each of the nine individual sessions that were tested (three folds of cross-session tests, with three different random seeds).
+
+A.4 Additional qualitative results. Figures A.1-A.4 contain additional qualitative results for the models: the in-distribution accuracy of the MobileNetV2 and TinyCNN models (in addition to the U-Net model in Figure 5.2), as well as the cross-session tests for the remaining two sessions.
+
+--- END OF BATCH 5 (final batch) ---

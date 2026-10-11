@@ -1,0 +1,186 @@
+/* =====================================================================
+   DLoc defense deck — professional theme
+   Fixed 1280x720 stage, JS-scaled to the viewport. Offline, no libraries.
+   ===================================================================== */
+:root{
+  --navy:#264653; --teal:#2a9d8f; --teal-d:#21867a; --orange:#e76f51;
+  --sand:#e9c46a; --red:#e63946; --ink:#1c2b33; --muted:#5b6b73;
+  --line:#e3e8ea; --bg:#0e1b21; --card:#ffffff; --soft:#f4f7f8;
+  --shadow:0 18px 50px rgba(0,0,0,.35);
+  --w:1280px; --h:720px;
+  --sans:"Segoe UI",Roboto,Helvetica,Arial,system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:var(--sans); color:var(--ink); background:
+    radial-gradient(1200px 700px at 70% -10%,#16323b 0%,var(--bg) 55%);
+  overflow:hidden;
+}
+
+/* ---- scaled stage ---- */
+#deck{position:fixed;inset:0;display:grid;place-items:center}
+#stage{
+  width:var(--w); height:var(--h); position:relative;
+  transform-origin:center center;
+}
+.slide{
+  position:absolute; inset:0; background:var(--card);
+  border-radius:14px; box-shadow:var(--shadow); overflow:hidden;
+  padding:54px 64px 60px; display:flex; flex-direction:column;
+  opacity:0; visibility:hidden; transition:opacity .28s ease;
+}
+.slide.active{opacity:1; visibility:visible}
+
+/* ---- slide chrome ---- */
+.slide::before{
+  content:""; position:absolute; top:0; left:0; right:0; height:8px;
+  background:linear-gradient(90deg,var(--navy),var(--teal) 60%,var(--sand));
+}
+.kicker{
+  display:inline-block; font-size:15px; letter-spacing:.16em;
+  text-transform:uppercase; font-weight:700; color:var(--teal-d);
+}
+.slide h2{
+  font-size:40px; line-height:1.07; color:var(--navy); margin:.12em 0 .35em;
+  font-weight:800; letter-spacing:-.01em;
+}
+.slide-foot{
+  position:absolute; bottom:18px; left:64px; right:64px;
+  display:flex; justify-content:space-between; align-items:center;
+  font-size:13px; color:var(--muted); border-top:1px solid var(--line);
+  padding-top:10px;
+}
+.slide-foot .brand{font-weight:700;color:var(--navy)}
+.slide-foot .pageno{font-variant-numeric:tabular-nums}
+
+/* ---- body / typography ---- */
+.body{flex:1; min-height:0; font-size:21px; line-height:1.42}
+.lead{font-size:24px;color:var(--muted);margin-bottom:.5em}
+ul.bullets{list-style:none; display:flex; flex-direction:column; gap:.5em}
+ul.bullets>li{position:relative; padding-left:1.4em}
+ul.bullets>li::before{
+  content:""; position:absolute; left:0; top:.55em; width:.62em; height:.62em;
+  background:var(--teal); border-radius:3px; transform:rotate(45deg);
+}
+ul.bullets ul{list-style:none;margin:.35em 0 .1em .3em;
+  display:flex;flex-direction:column;gap:.28em}
+ul.bullets ul>li{position:relative;padding-left:1.3em;font-size:.92em;color:var(--muted)}
+ul.bullets ul>li::before{content:"–";position:absolute;left:.2em;color:var(--orange);font-weight:800}
+strong{color:var(--navy)}
+.hl{color:var(--teal-d);font-weight:700}
+.warn{color:var(--orange);font-weight:700}
+
+/* ---- columns / cards ---- */
+.cols{display:grid; grid-template-columns:1fr 1fr; gap:30px; height:100%}
+.cols.w7{grid-template-columns:1.25fr 1fr}
+.cols.w3{grid-template-columns:1fr 1.25fr}
+.card{background:var(--soft); border:1px solid var(--line); border-radius:12px;
+  padding:18px 20px}
+.card h3{font-size:18px;color:var(--navy);margin-bottom:.4em;
+  text-transform:uppercase;letter-spacing:.05em;font-size:15px}
+.fig{display:flex;flex-direction:column;height:100%;justify-content:center}
+.fig img{width:100%; height:auto; max-height:100%; object-fit:contain;
+  border-radius:8px}
+.fig figcaption{font-size:14px;color:var(--muted);margin-top:8px;text-align:center}
+
+/* ---- stat blocks ---- */
+.stats{display:flex; gap:20px; flex-wrap:wrap}
+.stat{flex:1; min-width:150px; background:var(--soft); border:1px solid var(--line);
+  border-radius:12px; padding:16px 18px; text-align:center}
+.stat .num{font-size:38px; font-weight:800; color:var(--teal-d); line-height:1}
+.stat .num.navy{color:var(--navy)}
+.stat .num.warn{color:var(--orange)}
+.stat .lab{font-size:14px; color:var(--muted); margin-top:6px}
+
+/* ---- table ---- */
+table.t{width:100%; border-collapse:collapse; font-size:18px}
+table.t th,table.t td{padding:8px 10px; text-align:left; border-bottom:1px solid var(--line)}
+table.t th{color:var(--navy); font-size:14px; text-transform:uppercase; letter-spacing:.04em}
+table.t td.r,table.t th.r{text-align:right;font-variant-numeric:tabular-nums}
+table.t tr.best td{background:rgba(42,157,143,.10)}
+.best-txt{color:var(--teal-d);font-weight:800}
+.worst-txt{color:var(--red);font-weight:700}
+
+/* ---- callouts ---- */
+.callout{border-left:5px solid var(--teal); background:rgba(42,157,143,.08);
+  border-radius:8px; padding:12px 16px; font-size:19px}
+.callout.why{border-color:var(--navy); background:rgba(38,70,83,.07)}
+.callout.warnbox{border-color:var(--orange); background:rgba(231,111,81,.09)}
+.callout b{display:block;font-size:14px;text-transform:uppercase;
+  letter-spacing:.06em;margin-bottom:3px;color:var(--teal-d)}
+.callout.why b{color:var(--navy)} .callout.warnbox b{color:var(--orange)}
+
+/* ---- pills / tags ---- */
+.tag{display:inline-block; font-size:13px; font-weight:700; padding:3px 10px;
+  border-radius:999px; background:var(--navy); color:#fff; letter-spacing:.03em}
+.tag.teal{background:var(--teal-d)} .tag.orange{background:var(--orange)}
+.tag.ghost{background:transparent;color:var(--muted);border:1px solid var(--line)}
+
+/* ---- box-flow diagram ---- */
+.flow{display:flex; align-items:center; gap:0; flex-wrap:wrap; justify-content:center}
+.flow .node{background:var(--soft); border:1.5px solid var(--navy);
+  border-radius:10px; padding:12px 14px; text-align:center; font-size:15px;
+  min-width:96px; line-height:1.25}
+.flow .node.teal{border-color:var(--teal-d); background:rgba(42,157,143,.1)}
+.flow .node.orange{border-color:var(--orange); background:rgba(231,111,81,.1)}
+.flow .node small{display:block;color:var(--muted);font-size:12px}
+.flow .arr{color:var(--teal-d); font-size:26px; padding:0 10px; font-weight:700}
+
+/* ---- title slide ---- */
+.title-slide{justify-content:center; text-align:center; padding:70px}
+.title-slide .eyebrow{font-size:18px;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--teal-d);font-weight:700}
+.title-slide h1{font-size:52px;line-height:1.08;color:var(--navy);
+  font-weight:800;margin:.3em 0;letter-spacing:-.015em}
+.title-slide .sub{font-size:23px;color:var(--muted);margin-bottom:1.3em}
+.title-slide .who{font-size:19px;line-height:1.7}
+.title-slide .who .names{font-weight:700;color:var(--ink)}
+.title-slide .rule{height:4px;width:120px;margin:18px auto;border-radius:3px;
+  background:linear-gradient(90deg,var(--navy),var(--teal),var(--sand))}
+
+/* ---- section divider ---- */
+.divider{justify-content:center; background:
+  radial-gradient(900px 500px at 80% -10%,#1c3a44,#0f2128);}
+.divider::before{height:8px}
+.divider .kicker{color:var(--sand)}
+.divider h2{color:#fff;font-size:52px}
+.divider .body{color:#cdd9dd;font-size:22px}
+
+/* ---- backup tag ---- */
+.backup .slide-foot .brand::after{content:" · BACKUP";color:var(--orange)}
+
+/* small note row */
+.note-row{font-size:16px;color:var(--muted);margin-top:.5em}
+
+/* ===== HUD (outside scaled stage) ===== */
+#hud{position:fixed; left:0; right:0; bottom:0; height:4px; background:rgba(255,255,255,.08); z-index:30}
+#bar{height:100%; width:0; background:linear-gradient(90deg,var(--teal),var(--sand)); transition:width .25s}
+#counter{position:fixed; right:14px; top:12px; color:#cdd9dd; font-size:13px;
+  z-index:31; font-variant-numeric:tabular-nums; background:rgba(0,0,0,.28);
+  padding:3px 9px; border-radius:8px}
+#hint{position:fixed; left:14px; top:12px; color:#cdd9dd; font-size:12px; z-index:31;
+  background:rgba(0,0,0,.28); padding:3px 9px; border-radius:8px;
+  animation:hintfade .5s ease 6s forwards}
+@keyframes hintfade{to{opacity:0; visibility:hidden}}
+
+/* ===== speaker notes ===== */
+#notes{position:fixed; right:0; top:0; bottom:0; width:360px; background:#11242b;
+  color:#dfe9ec; padding:24px 22px; overflow:auto; transform:translateX(100%);
+  transition:transform .25s; z-index:40; box-shadow:-10px 0 30px rgba(0,0,0,.4);
+  font-size:15.5px; line-height:1.5}
+body.show-notes #notes{transform:none}
+#notes h4{color:var(--sand); font-size:13px; letter-spacing:.1em; text-transform:uppercase; margin-bottom:10px}
+#notes .nbody{white-space:pre-wrap}
+.notes{display:none}
+
+/* ===== print → PDF export ===== */
+@media print{
+  body{background:#fff;overflow:visible}
+  #deck{display:block}
+  #stage{transform:none!important; width:100%; height:auto}
+  .slide{position:relative; opacity:1!important; visibility:visible!important;
+    page-break-after:always; box-shadow:none; border-radius:0;
+    width:100%; height:7.5in; margin:0}
+  #hud,#counter,#hint,#notes{display:none!important}
+}

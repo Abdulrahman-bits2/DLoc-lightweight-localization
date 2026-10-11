@@ -1,0 +1,84 @@
+============================================================
+DLoc THESIS - REWRITE BATCH 3 of 5
+
+Chapter 3 (3.4-3.6) + Chapter 4 (Implementation) + Chapter 5 (5.1)
+
+Rewrite in your voice. Keep section headings and [cite: X] markers in place.
+
+Tables/equations/figures are NOT here - they stay as-is in the .tex files.
+
+3.4 Knowledge-Distillation Framework
+
+Each student was trained in two modes: a standalone mode that used only the ground-truth heatmaps for supervision, and a distilled mode that additionally aimed to minimize the difference between its outputs and the teacher model’s output. The objective function used for the distilled mode was a convex combination of the ground-truth heatmap and teacher output (Equation 3.1), where y-hat is the student’s output, y is the ground-truth heatmap, and y_T is the teacher’s pre-computed output. The weights used in the combination were \alpha = 0.7 and \beta = 0.3. Because the teacher is fixed, its output is pre-computed prior to training. As a result, the teacher model’s forward pass is never invoked during the training of the students. Furthermore, because the teacher model is trained and updated via reinforcement learning, its heatmap outputs are “soft” targets; it does not output one-hot maps with all of the probability mass concentrated at the true location of the target object. Thus, its targets encourage the students to reproduce the location of the target object as well as the probability mass around it - an implicit regularizer for the student models.
+
+3.5 Experimental Design
+
+The experiments that were performed on the proposed models are described below.
+
+In-distribution accuracy is measured on the test set from Session 2 to determine the accuracy of the localization models and the cost of model compression.
+
+The models are evaluated under various forms of signal degradation at test time to determine their robustness to real-world signal conditions. The corruptions that are applied include individual and random AP dropout, Gaussian noise of sigma 0.1 and 0.2, global and single AP attenuation, and spatial blur.
+
+Cross-session generalization is evaluated within the original DLoc protocol (where models are trained on three of the sessions and tested on the fourth) as well as through a zero-shot evaluation in which the student models are trained only on the two July sessions and evaluated on the August sessions.
+
+The DLoc model is additionally trained using three different random seeds to evaluate the statistical significance of the reported results.
+
+Lastly, the computational efficiency of each model is measured; an essential consideration for potential deployment of the methods.
+
+3.6 Evaluation Metrics
+
+The primary evaluation metric is the error of the localization models, which is the distance between the predicted location (the peak of the heatmap) and the location of the ground-truth heatmap. The distance between the two points is given by Equation 3.2 and scaled by the 0.1 m per pixel measurement of the sessions’ CSI measurements.
+
+From the localization error for each sample, median error, 90th percentile error (P90), 99th percentile error (P99), and mean error can be calculated. Furthermore, because the error is scaled to distance in meters, the error is always divisible by 0.1 m. Thus, the achievable errors are multiples of 0.1*sqrt(n) for an n-dimensional space. As a result, it is possible for two models to have identical median errors yet different full error distributions; in these cases, the mean error and the error distribution itself is additionally reported.
+
+4.1 Codebase and Training Infrastructure
+
+The codebase that was used to implement the proposed methods is described in this section. Additionally, the tools that were used to pre-compute the teacher outputs, train the student models, evaluate their robustness, test their generalization capabilities, and the tools that made these models repeatable across different random seeds are presented.
+
+All of the models were implemented in PyTorch. The codebase is organized as a package that contains the DLoc model generators, a data loader package, and evaluation and training utilities; a models package that contains the student model classes; and an evaluation package that contains the scripts used for benchmarking the models and generating the figures in this manuscript.
+
+The models were trained on rented NVIDIA H100 GPUs (Vast.ai). Additionally, the models were also benchmarked and figures were generated on a local NVIDIA RTX 3060 GPU. All of the trained models, training logs, evaluation files, and pre-computed teacher model outputs are archived on the Hugging Face Hub [links].
+
+In general, the code was written to allow for repeatable experiments. For example, localization error is calculated as the distance in a 2D space between the predicted and ground-truth locations of the objects in the images. In the original implementation of this calculation, NumPy’s threaded backend was invoked (via the python math libraries) for each image. On a 192-core machine, this results in the math libraries spinning up their entire thread pool for each model, effectively utilizing only a few of the available CPUs. Thus, constraining the math libraries to utilize only a single thread (via the OMP_NUM_THREADS environment variables) ensures that training proceeds as quickly as possible.
+
+4.2 Teacher Output Precomputation
+
+To enable the training of the students in the distilled mode, the teacher output (y_T) is pre-computed for every example in the training and test set. These files are cached on disk (approximately 4.09 GB for the training split and 0.99 GB for the test split). The trained students during the distilled mode are trained to minimize the distance between its outputs and these cached teacher outputs; thus, the teacher model is never invoked during the training of the students.
+
+This pre-computation of the teacher’s output is the only change that was made to enable the training of the students in the distilled mode.
+
+4.3 Student Training
+
+The convolutional models were trained for 50 epochs with the Adam optimizer at a learning rate of 1e-4 with a batch size of 64. The MobileNetV2-UNet model was trained for 120 epochs. For training the MobileNetV2-UNet with AdaBelief, two different learning-rate schedules were used. For the cosine annealing schedule, the learning rate was annealed from the initial learning rate of 1e-4 to zero over the course of the 120 epochs. For the step decay schedule, the learning rate was halved every 20 epochs. The DLoc baseline is trained using SGD with a step learning rate schedule; for the encoder, location decoder, and offset decoder components of the DLoc baseline, the step sizes are 0.3, 0.5, and 0.4, respectively. Each of the models was trained in both its standalone and distilled mode; in the distilled mode, \alpha was set to 0.7 and \beta was set to 0.3. For each student, the model checkpoint with the minimum error in its test set was selected as the best checkpoint; per-epoch metrics for both the training and test set were recorded for each training run.
+
+4.4 Robustness Test Harness
+
+Robustness is evaluated by applying signal degradations to the CSI measurements at test time, without retraining the models. For each model, the signal is corrupted in six different ways: by dropping the signal from one of the four APs (either individually or at random), by adding Gaussian noise of sigma 0.1 and 0.2, by globally attenuating the signal by 50%, by attenuating the signal from one AP to 30% of its original strength, and by applying Gaussian blur to the CSI signal with a 5x5 kernel and sigma 1.
+
+4.5 Cross-Session Leave-One-Session-Out Pipeline
+
+The cross-session experiment was performed with the same protocol as the original DLoc leave-one-session-out method. Three different folds are used, each of which drops one of the three August WiFi sessions from the training set, and trains and tests the models on the three remaining sessions. Within each fold, the MobileNetV2-UNet is trained according to its own method (Adam at 1e-4 with cosine annealing over 120 epochs) for three different random seeds. Scripts that automate this process trained the models with the three different random seeds within each fold, and aggregated the results from each train-test run into the mean and standard deviation table of the results (Section 5.4). Unlike the distillation experiments, the DLoc teacher model was not trained on these folds; the results of this experiment are directly comparable to the published results of DLoc. Furthermore, because distillation is performed at training time, it would be necessary to retrain a teacher model for each of these folds; thus, the models were trained in standalone mode only within these cross-session experiments. Thus, the purpose of these experiments is to report on the performance of the standalone MobileNetV2-UNet model.
+
+4.6 Multi-Seed and Benchmarking
+
+In addition to testing the models for their in-distribution accuracy, cross-session accuracy, and robustness, the student models were additionally trained with three different random seeds. Furthermore, a script that measured the computational efficiency of the models was written; it evaluates each model’s number of parameters, the number of floating point operations it performs (FLOPs), and the latency of its predictions when given a set of dummy inputs. These results are presented in Section 5.6 of this paper. Furthermore, a figure generation script additionally regenerates the error arrays of each model, given the model checkpoints and the measurement data. Using these arrays, figures of the cumulative distribution of the per-sample error, the distribution of errors of the different models in each session, the cross-session error distribution, and the qualitative heatmaps are regenerated in this paper.
+
+============================================================
+
+CHAPTER 5 - RESULTS AND DISCUSSION
+
+(chapter intro) The results of the proposed model evaluations are presented in this chapter, along with a discussion of each result.
+
+5.1 In-Distribution Accuracy
+
+Table 5.1 presents the accuracy of each student model on the test set of Session 2. Figure 5.1 presents the distribution of per-sample error for each of the three convolutional student models.
+
+The MobileNetV2 model achieves a lossless 7.2x compression of the DLoc baseline model. The MobileNetV2 model achieves the same 0.707 m median error as the DLoc model, indicating that it can achieve the same accuracy with fewer parameters. This indicates that the DLoc model is over-parameterized for in-distribution modeling. A model with 2.3 million parameters is able to achieve the same accuracy as a model with 16.5 million parameters.
+
+The TinyCNN model is limited by its model capacity. The TinyCNN model reaches a median error of 3.922 m, five times the error of the baseline model. TinyCNN has only three convolutional layers; it is likely that the model is too small to effectively learn both the per-AP features as well as the spatial features of the location. Furthermore, the P90 (the point at which 90% of predictions are within the distance of the true location) of the TinyCNN model is 13.9 m, which is five times the error of the baseline model. Furthermore, 2 million parameters are required for this model; with fewer parameters than this floor, no amount of training will achieve the accuracy required for localization of objects in these images.
+
+The in-distribution accuracy does not benefit from distilled training. Both standalone and distilled versions of each model achieved the same median error. In-distribution, the teacher’s output is nearly identical to the ground truth; its supervision is redundant for the distilled model. Thus, distilled training is only beneficial when the student model is evaluated outside of in-distribution.
+
+The MobileNetV2-UNet model outperforms the teacher. MobileNetV2-UNet achieved a median error of 0.640 m, which is a 9.5% improvement over the MobileNetV2 model and the DLoc baseline. Furthermore, MobileNetV2-UNet used only 2.41M parameters. The introduction of the skip connections allows MobileNetV2-UNet to achieve higher accuracy with fewer parameters than the teacher model. Furthermore, qualitative examples of MobileNetV2-UNet predictions are shown in Figure 5.2.
+
+--- END OF BATCH 3 (next: Chapter 5 sections 5.2-5.4) ---

@@ -1,0 +1,34 @@
+%% ====================================================================
+%%  Chapter 7 — Future Work
+%% ====================================================================
+\chapter{Future Work}
+\label{ch:futurework}
+
+Beyond the results presented in this thesis, there are several directions for future work on this
+project.
+
+\paragraph{Deploying the model on E-JUST's edge devices.} The most immediate next step in this project is
+to deploy the MobileNetV2-UNet model on edge devices on the E-JUST campus. While the computational cost
+and accuracy of the model are reported in this thesis, the model has yet to be deployed on any device.
+Because the inference time of the MobileNetV2-UNet on a CPU is 27.2\,ms compared to DLoc's 270.9\,ms, the
+MobileNetV2-UNet is a strong candidate for deployment on edge devices.
+
+\paragraph{Creating a new localization dataset on E-JUST's campus.} The model was trained and evaluated
+on the WILD dataset, which exists in only one building: Jacobs Hall. A new dataset could be created at
+E-JUST containing CSI measurements taken in a different building on the campus. Such a dataset would allow
+the results of this thesis to be evaluated for their transferability to a new WiFi environment.
+
+\paragraph{Statistical validation of the student models.} The statistical validation of the baseline
+model is presented in this thesis. Validation of the student models under multiple random seeds was
+de-scoped due to the computational cost of training those models. The student models could be trained
+under several random seeds to provide significance testing of the comparisons between the students and the
+baseline model.
+
+\paragraph{Applying corruption augmentation during training.} The robustness of the models was tested by
+applying corruptions only during the testing phase. If these corruptions were also applied during
+training, it is likely that the robustness of the models would increase, which would be beneficial in
+environments where such robustness is required.
+
+\paragraph{Exploring other architectures.} The architecture of the MobileNetV2-UNet model was explored in
+this research. Further exploration of other architectures---such as models that use Mamba layers or add
+attention mechanisms to the skip connections---could reveal additional benefits to the student models.

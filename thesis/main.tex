@@ -1,0 +1,47 @@
+%% ====================================================================
+%%  Lightweight Knowledge-Distilled WiFi Localization — B.Sc. Thesis
+%%  E-JUST, School of Electronics, Communications and Computer Engineering
+%%
+%%  Compile:  pdflatex main  ->  bibtex main  ->  pdflatex main  ->  pdflatex main
+%%  (or:  latexmk -pdf main.tex)
+%%
+%%  Each chapter lives in its own file under chapters/ so authors can
+%%  rewrite them independently; this file just stitches them together.
+%% ====================================================================
+\documentclass[12pt,a4paper,oneside]{report}
+
+\input{preamble}
+
+\begin{document}
+
+%% ---------------- Front matter ----------------
+\input{frontmatter/titlepage}
+
+\pagenumbering{roman}
+\input{frontmatter/abstract}
+
+\tableofcontents
+\listoffigures
+\listoftables
+\clearpage
+
+%% ---------------- Body ----------------
+\pagenumbering{arabic}
+\input{chapters/01_introduction}
+\input{chapters/02_literature_review}
+\input{chapters/03_methodology}
+\input{chapters/04_implementation}
+\input{chapters/05_results_discussion}
+\input{chapters/06_conclusion}
+\input{chapters/07_future_work}
+
+%% ---------------- Back matter ----------------
+\nocite{*}
+
+\bibliographystyle{ieeetr}
+\bibliography{references}
+
+\appendix
+\input{chapters/08_appendix}
+
+\end{document}

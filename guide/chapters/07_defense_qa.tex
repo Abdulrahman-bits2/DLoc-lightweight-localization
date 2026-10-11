@@ -1,0 +1,223 @@
+%% ====================================================================
+%%  Chapter 7 — Defense Q&A
+%% ====================================================================
+\chapter{Defense Q\&A}
+\label{ch:qa}
+
+This chapter rehearses the questions a committee is most likely to ask, grouped by topic, each with a
+sharp answer and a pointer back to the concept that backs it up. Practice saying the answer in one or
+two sentences first, then expand only if asked. When a number is involved, state it ---committees trust
+specifics.
+
+\section{Problem and framing}
+\label{sec:qa:framing}
+
+\textbf{Q1. Why predict a heatmap instead of directly regressing the $(x,y)$ coordinates?}\\
+A heatmap preserves spatial structure and represents \emph{uncertainty} and \emph{multimodality}
+---when two locations are plausible, the heatmap can show two bumps, and the argmax still gives a
+decision. Direct coordinate regression collapses that structure, handles ambiguity poorly, and cannot
+exploit the convolutional locality that makes the image framing work (Sec.~\ref{sec:found:translation}).
+
+\textbf{Q2. What is CSI, and why does it carry location information?}\\
+Channel State Information is the per-subcarrier, per-antenna complex channel estimate WiFi hardware
+already computes. Amplitude is a (noisy) distance cue; phase progression \emph{across antennas} encodes
+angle of arrival; phase progression \emph{across subcarriers} encodes time of flight, hence distance
+(Sec.~\ref{sec:found:csi}--\ref{sec:found:aoa}).
+
+\textbf{Q3. Why four input channels?}\\
+One channel per access point; the Jacobs Hall environment has four APs, stacked into a
+$[4,161,361]$ image at $0.1$\,m/pixel (Sec.~\ref{sec:found:aoa}).
+
+\textbf{Q4. What is the clock/ToF offset and why does it matter?}\\
+Device and AP clocks are unsynchronized, so an unknown delay shifts each AP's heatmap radially (by
+$10$--$15$\,m) and the four APs disagree on the location. Resolving this is the core thing a
+\emph{learned} system does and classical geometry cannot ---it is what DLoc's consistency decoder is for
+(Sec.~\ref{sec:found:offset}).
+
+\textbf{Q5. Why deep learning rather than a classical method like SpotFi?}\\
+Classical AoA/ToF estimation degrades badly under non-line-of-sight and rich multipath, where the
+strongest path is often a reflection. A network learns to pick the direct path by cross-checking APs
+and to undo the offset, at the price of model size ---which is exactly what we then compress
+(Sec.~\ref{sec:found:why_dl}).
+
+\section{Architectures}
+\label{sec:qa:arch}
+
+\textbf{Q6. How can a 2.41\,M student beat its own 16.5\,M teacher?}\\
+U-Net skip connections feed the decoder high-resolution spatial detail that the encoder bottleneck
+discards; since the answer is a precise location, restoring that detail lowers error to 0.640\,m vs
+0.707\,m. The improvement is $6.5$ standard deviations beyond the baseline's seed spread, so it is real
+(Sec.~\ref{sec:arch:unet}, Finding~2).
+
+\textbf{Q7. What are depthwise-separable convolutions, in one breath?}\\
+A standard convolution mixes space and channels at once; the separable version splits it into a cheap
+spatial mix (depthwise) and a cheap channel mix (pointwise, $1\times1$), cutting cost about
+$8$--$9\times$ for nearly the same power. They are why 2.3\,M parameters suffice
+(Sec.~\ref{sec:blocks:dwsep}).
+
+\textbf{Q8. Why did TinyCNN fail?}\\
+At 47\,K parameters it is below the task's $\sim$2\,M capacity floor; it cannot learn both per-AP signal
+features and four-AP spatial fusion, so it lands at $\sim$3.9\,m, five times the baseline
+(Sec.~\ref{sec:arch:tinycnn}).
+
+\textbf{Q9. Why did Mamba fail ---and is that just because it is small?}\\
+No: at 0.65\,M it is \emph{larger} than TinyCNN yet far worse, so it is not capacity. It is an
+architectural mismatch ---Mamba consumes a 1D sequence, but the target is a 2D heatmap; flattening
+destroys spatial locality. And it is not overfitting, because training and test error rise
+\emph{together} after epoch~1 (Sec.~\ref{sec:arch:mamba}).
+
+\textbf{Q10. What is the consistency decoder, and do your students have one?}\\
+It is DLoc's second decoder, trained to make the four per-AP heatmaps agree; that agreement teaches
+offset removal, multipath resolution, and super-resolution. Our students omit it (single-decoder
+design), which is why they trail DLoc slightly on the reflector fold's median
+(Sec.~\ref{sec:arch:dloc}, Sec.~\ref{sec:arch:unet}).
+
+\textbf{Q11. Why MobileNetV2 as the backbone?}\\
+It was designed for edge deployment: depthwise-separable convolutions in inverted-residual blocks give
+a strong accuracy-per-parameter trade-off, which is exactly the axis we care about
+(Sec.~\ref{sec:blocks:invres}).
+
+\section{Knowledge distillation}
+\label{sec:qa:kd}
+
+\textbf{Q12. What is knowledge distillation?}\\
+Training a small student to reproduce a large teacher's \emph{soft} outputs alongside the ground truth.
+The soft outputs carry ``dark knowledge'' ---structure the hard label omits (Sec.~\ref{sec:distill:hinton}).
+
+\textbf{Q13. There is no softmax or temperature here ---is this really distillation?}\\
+Yes. The teacher's output is already soft \emph{by construction}: a heatmap with probability mass
+spread around the location. That spread is the dark knowledge, so distillation here acts as
+\emph{spatial label smoothing} (Sec.~\ref{sec:distill:ours}).
+
+\textbf{Q14. Why $\alpha=0.7$, $\beta=0.3$?}\\
+To keep the ground-truth term dominant while letting the teacher's softer target act as a gentle
+regularizer; the blend is a convex combination, not a tuned-to-death hyperparameter
+(Sec.~\ref{sec:distill:loss}).
+
+\textbf{Q15. Why does distillation not improve clean accuracy?}\\
+In distribution the teacher's heatmap is nearly identical to the ground truth, so its term is
+redundant; standalone and distilled models post the same median. The benefit appears only off
+distribution (Findings~3, Sec.~\ref{sec:distill:smoothing}).
+
+\textbf{Q16. Why precompute the teacher's outputs?}\\
+The teacher is frozen, so we cache its output for every sample once ($\approx$4.09\,GB train,
+0.99\,GB test) and never run the 16.5\,M model inside the training loop ---making it cheap to distill
+many students across many seeds (Sec.~\ref{sec:distill:loss}).
+
+\section{Robustness}
+\label{sec:qa:robust}
+
+\textbf{Q17. Why is the standalone MobileNetV2 so fragile under noise (16.4\,m)?}\\
+Its aggressive bottleneck keeps no shallow, high-resolution shortcut; a little input noise scrambles
+the single latent and the predicted peak jumps far away ---essentially guessing
+(Sec.~\ref{sec:arch:mobilenet}).
+
+\textbf{Q18. How do skip connections give robustness on top of accuracy?}\\
+The shallow features they carry travel a short path that bypasses the noise-amplifying bottleneck, so a
+corrupted latent no longer dooms the prediction. This is architectural, independent of distillation,
+and worth $5.5\times$ under $\sigma{=}0.1$ noise (Sec.~\ref{sec:arch:unet}, Finding~5).
+
+\textbf{Q19. Why are the two robustness mechanisms ``complementary, not additive''?}\\
+Skips help most against \emph{noise}; distillation helps most against \emph{AP dropout}. Stacked under
+noise, the distilled U-Net ($3.469$\,m) is actually slightly worse than the standalone ($3.000$\,m), so
+they do not simply add ---you pick the one matching the expected corruption (Finding~5).
+
+\textbf{Q20. You only corrupt at test time ---wouldn't training-time augmentation be better?}\\
+Probably, and we say so: testing without retraining measures how a \emph{deployed} model copes with
+unseen conditions. Training-time corruption augmentation is explicitly listed as future work
+(Sec.~\ref{sec:eval:corruptions}).
+
+\section{Metrics and evaluation}
+\label{sec:qa:metrics}
+
+\textbf{Q21. Why report mean, P90, P99, and the CDF instead of just the median?}\\
+The median is robust but hides the tail and is pixel-quantized; the mean exposes heavy tails, the
+percentiles describe worst cases that matter for deployment, and the CDF shows the whole distribution
+at once (Sec.~\ref{sec:eval:stats}--\ref{sec:eval:cdf}).
+
+\textbf{Q22. Why do several of your models report \emph{identical} medians?}\\
+Because the error is a pixel distance scaled by $0.1$, achievable values are quantized to multiples of
+$0.1\sqrt{n}$. An identical median can be a quantization artifact, not proof of equal quality ---which
+is exactly why we lean on the mean, percentiles, and CDF (Sec.~\ref{sec:eval:quant}).
+
+\textbf{Q23. Given quantization, is 0.640 vs 0.707\,m a real difference?}\\
+Yes: it is a $9.5\%$ improvement, it is $6.5$ standard deviations beyond the baseline's seed spread,
+and it holds across the full CDF and the P90/P99 tails ---not on the median alone
+(Sec.~\ref{sec:arch:unet}, Finding~2).
+
+\section{Cross-session generalization}
+\label{sec:qa:cross}
+
+\textbf{Q24. What is the difference between the LOSO and zero-shot evaluations, and which compares to
+DLoc?}\\
+Leave-one-session-out (LOSO) holds out one August session per fold and matches DLoc's published
+protocol exactly ---that is the fair comparison (mean 0.930 vs 0.86\,m). Zero-shot trains on only the
+two July sessions and is an internal architecture/distillation ablation, \emph{not} a DLoc comparison
+(Sec.~\ref{sec:eval:crosssession}).
+
+\textbf{Q25. Why are the LOSO models standalone rather than distilled?}\\
+Distilling each fold would require retraining a teacher on that fold; to keep the numbers directly
+comparable to the published (non-distilled-per-fold) DLoc results, we run the LOSO models standalone
+(Sec.~\ref{sec:eval:crosssession}, Sec.~\ref{sec:find:6}).
+
+\textbf{Q26. You are behind DLoc on cross-session median ---isn't that a loss?}\\
+We are within 0.14\,m on average, \emph{match} DLoc on the different-furniture fold, hold the same
+average P90, and \emph{beat} DLoc's P90 on the reflector fold ---all at $6.8\times$ fewer parameters. It
+is an honest efficiency result, and we frame it as one (Finding~6).
+
+\textbf{Q27. Why is the reflector session the hardest?}\\
+The aluminum panel injects strong specular multipath ---mirror-like reflections that create convincing
+``phantom'' locations. DLoc's consistency decoder helps most precisely here, which is the one place our
+single-decoder model gives up a little median (Sec.~\ref{sec:eval:sessions}, Sec.~\ref{sec:arch:unet}).
+
+\section{Efficiency and deployment}
+\label{sec:qa:deploy}
+
+\textbf{Q28. What is the headline efficiency number?}\\
+The MobileNetV2-UNet runs in $27.2$\,ms on CPU at $1.45$\,GFLOPs, versus DLoc's $270.9$\,ms and
+$81.06$\,GFLOPs ---a $10\times$ latency and $56\times$ compute reduction, at \emph{better} accuracy
+(Sec.~\ref{sec:eval:efficiency}).
+
+\textbf{Q29. Why stress CPU latency rather than GPU?}\\
+The target platforms ---IoT gateways, smartphones, the access points themselves--- usually have no GPU,
+so CPU latency is the realistic deployment cost (Sec.~\ref{sec:eval:efficiency}).
+
+\textbf{Q30. Have you actually deployed the model on hardware?}\\
+Not yet. Its $27.2$\,ms CPU inference makes it a strong candidate, and deployment on E-JUST edge devices
+is the first item of future work; we report the efficiency, not a field deployment.
+
+\section{Limitations and negative results}
+\label{sec:qa:limits}
+
+\textbf{Q31. Your DLoc reproduction is 0.707\,m, but the paper reports 0.64\,m ---does that undermine
+your comparisons?}\\
+No. The gap is an implementation difference. The cross-session comparison uses the \emph{published}
+DLoc numbers, so it is fair; the in-distribution comparisons are all against our \emph{own} consistent
+reproduction. We never compare a student to a number we did not reproduce under the same conditions
+(README limitations, Sec.~\ref{sec:arch:dloc}).
+
+\textbf{Q32. All data come from one building ---what about a different environment?}\\
+Cross-\emph{building} generalization is out of scope because the data are unavailable; we test
+cross-\emph{session} within Jacobs Hall. Collecting a new CSI dataset at E-JUST is explicit future work
+(Sec.~\ref{sec:eval:sessions}).
+
+\textbf{Q33. You only multi-seeded the baseline ---how do you claim significance for the students?}\\
+The baseline is three-seeded ($0.875\pm0.036$\,m), giving a calibrated noise floor against which the
+U-Net's 0.640\,m is $6.5\sigma$; the cross-session U-Net is also three-seeded per fold. Per-student
+multi-seed elsewhere was de-scoped for compute budget and is named as future work
+(the multi-seed validation section of the thesis).
+
+\textbf{Q34. Why include Mamba at all if it failed?}\\
+A clean negative result is evidence. Mamba's failure isolates the image-to-image \emph{framing} as
+load-bearing: it is not ``any small modern network'' that works, but specifically one that treats the
+CSI as a 2D image (Sec.~\ref{sec:arch:mamba}).
+
+\section{The big picture}
+\label{sec:qa:big}
+
+\textbf{Q35. Summarize your contribution in one sentence.}\\
+A model an order of magnitude smaller than DLoc can match or beat it by adding the right
+\emph{structure} (U-Net skip connections) rather than parameters, and by using knowledge distillation
+---which here acts as spatial label smoothing--- to harden it against signal degradation, with the
+caveat that distillation only helps students above a $\sim$2\,M-parameter capacity threshold
+(Ch.~\ref{ch:findings}).

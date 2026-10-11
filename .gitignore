@@ -65,3 +65,27 @@ stand alon/
 
 # local Claude Code config
 .claude/
+
+# ---- Handover excludes (bloat / third-party / scratch / backups) ----
+# Easy to add later; kept out of the public repo on purpose.
+*.zip
+Related papers/
+Past_Thesis.pdf
+new machine/
+extracted_text/
+New folder/
+notepad.txt
+friend.txt
+upload/
+*WhatsApp*
+
+# Local LaTeX compiler binary (48 MB, machine-specific) + duplicate root thesis PDF
+.tools/
+/Final_Thesis.pdf
+
+# NilesConf working/backup artifacts (keep LaTeX sources + final PDFs/PPTX)
+NilesConf/**/build/
+NilesConf/*_BEFORE_DATAFIX.pptx
+NilesConf/*_PREMERGE.pptx
+NilesConf/*_PRE_REVIEWFIX.pptx
+NilesConf/submission/main - Copy.pdf

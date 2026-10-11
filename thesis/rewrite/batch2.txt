@@ -1,0 +1,76 @@
+============================================================
+DLoc THESIS - REWRITE BATCH 2 of 5
+
+Chapter 2 (2.3, 2.4) + Chapter 3 (intro, 3.1-3.3)
+
+--- END OF BATCH 2 (next: Chapter 3 sections 3.4-3.6, Chapter 4, and Chapter 5 section 5.1) ---
+
+\section{Efficient Neural Architectures}
+
+\subsection{Overview of Existing Lines of Work}
+
+The four models that comprise the student networks each incorporate ideas from different lines of existing computer vision and deep learning research.  The majority of these models were introduced as efficient alternatives to conventional deep learning models, either in terms of their required computational resources or their memory footprint.  Each of these models is described in the sections that follow.
+
+\subsection{Residual Learning}
+
+ResNets \[cite: ResNet\] were among the first deep learning models to incorporate the idea of “skip connections” into their architectures; these connections allowed gradients to flow through deep networks to each of the network’s parameters, enabling the training of deep learning models with many hidden layers.  The success and widespread adoption of ResNets led to the discovery of the value of such “shortcuts” in deep learning models, an idea that is implemented in the skip connections of this thesis.
+
+\subsection{MobileNetV2}
+
+MobileNetV2 \[cite: MobileNetV2\] was introduced as a mobile deep learning model that could be deployed on mobile devices with limited computational resources.  MobileNet models replace conventional convolution layers in deep learning models with depthwise-separable convolutions, which reduce the number of multiply-accumulate operations required by the deep learning model by a factor of roughly 100; they also employ inverted residual blocks, which enable MobileNet models to maintain a small memory footprint relative to conventional deep neural networks.  MobileNetV2 is used as the encoder for three of the four students proposed in this thesis.
+
+\subsection{UNet Skip Connections}
+
+UNet models \[cite: U-Net\] were first applied to problems in the field of biomedical image analysis, where deep learning models had to segment images into different regions of an analyzed image.  The architecture of a UNet model includes skip connections that enable the model to directly access high-resolution image features that would otherwise be lost during the model’s encoding process.  Thus, UNet models are naturally applicable to the problem of generating a heatmap from CSI measurements, as the system must accurately determine the spatial location of the device emitting the WiFi signal.  These skip connections are incorporated into the MobileNetV2-UNet model in Chapter 5.
+
+\subsection{State-Space Models (Mamba)}
+
+State-space models have recently emerged as an alternative to models based on self-attention; both due to the efficiency of state-space models in terms of computational and memory requirements, and because state-space models have exhibited strong performance on sequence modeling tasks.  Mamba models \[cite: Mamba\] employ a new type of attention-like mechanism whose parameters are adapted based on the content of the input, and have been applied to computer vision tasks \[cite: Visual-Mamba\].  The inclusion of a student model based on the Mamba architecture explores whether an inductive bias different from conventional deep learning models is competitive against those alternatives.
+
+\section{Robustness to Degraded and Shifted Distributions}
+
+In addition to measuring the accuracy of a model during training and testing with high-quality data, it is often important to evaluate the model’s accuracy in the face of degraded or differently-distributed data; these measures of a model’s robustness are particularly important for models that are to be deployed in real-world environments.  For vision-based deep learning models, one way of measuring robustness is to introduce types of degradation to the training and test images, such as noise, blur, weather effects, or digital image processing artifacts.  Hendrycks and Dietterich \[cite: ImageNet-C\] published a standard deep learning benchmark for evaluating robustness to these types of corruptions to images.  Relatedly, it is often important to determine how well a model generalizes to data that differs from the training data in ways that are not explicitly accounted for during training, such as changes in environment over time.
+
+In both of these contexts, it becomes important to evaluate the robustness of a model to these types of changes.  The robustness of a model’s predictions to these types of corruptions or distribution shifts is particularly important for WiFi localization systems; APs can experience failures, there can be interference in the WiFi signal, and the physical layout of the area that is to be localized can change over time.  Thus, we evaluate the robustness of each of the students to these types of corruptions and shifts, in the same way that \[cite: ImageNet-C\] has evaluated the robustness of DLoc to image corruptions, and we apply a similar measure of robustness to the WILD data to assess the model’s invariance to distribution shifts.
+
+\section{Methodology}
+
+This chapter describes the system, data, models, and evaluation methods that will be employed in this thesis.  First, we review the DLoc system that was used to introduce the CSI-to-heatmap problem.  Second, we describe the WILD dataset on which we will base our experiments.  Third, we describe the four models that will be evaluated in this thesis.  Finally, we describe the experiments that will be performed to evaluate each of the models.
+
+\subsection{Overview of the DLoc System Architecture}
+
+ The DLoc system \[cite: DLoc\] frames the indoor localization problem as an image-to-image translation problem.  The image that is provided to the system is built from the CSI measurements that are collected from the WiFi access points, and the system outputs a heatmap that represents the location of the device that was emitting the WiFi signal.  More specifically, each of the four access points can provide a two-dimensional representation of the CSI measurements that were collected from that access point, and these representations can be stacked together into a four-channel image; the heatmap that is output by the system has the same spatial dimensions as the input image, but is only one channel, and contains a Gaussian bump of a size indicating the location of the device at a spatial resolution of 0.1 meters per pixel.
+
+DLoc’s architecture consists of a ResNet encoder \[cite: ResNet\] and a location decoder.  The ResNet encoder contains six residual blocks with 64 filters each, and compresses the four-channel image into a high-dimensional representation.  The location decoder then upsamples this representation to the size of the original image to generate the heatmap.  Additionally, DLoc employs a second decoder that outputs an “offset” heatmap to ensure that the outputs of the four access points correlate to the location of the device being localized.  The DLoc model has an approximate parameter count of 16.5 million parameters.  Thus, the location of the device can be determined by applying a sigmoid function to the output of the location decoder and determining the peak of the resulting heatmap.
+
+The training loss of DLoc is defined as a combination of the difference between the predicted and target heatmaps, and the offset heatmap; stochastic gradient descent is used to minimize this objective.  The DLoc system will be utilized in this thesis in two ways: as a baseline model against which the other models will be compared in terms of both their accuracy and efficiency, and as the teacher in the training of the knowledge-distilled student models.
+
+\subsection{The WILD Dataset}
+
+All experiments are performed upon the WILD (WiFi-based Indoor Localization Dataset) dataset, which was collected in the Jacobs Hall building at UC San Diego \[cite: DLoc\].  The dataset was collected from four access points during five different data collection sessions.  Each collection session took place under slightly different environmental conditions, as summarized in Table 3.1.
+
+More specifically, Sessions 1 and 2 (named jacobs_Jul28 and jacobs_Jul28_2) occurred within one hour of each other and used the same environmental conditions.  During training, the training data from Session 1 and the training data from Session 2 were both used to train the model; during testing, the test data from Session 2 was used to evaluate the model.  Sessions 3, 4, and 5 occurred three weeks later, during which the layout of the rooms where the measurements were collected were altered in arbitrary ways (Session 3), with a different layout of the furniture in the building (Session 4), or with the addition of an aluminum panel used to reflect the WiFi signal (Session 5).
+
+\subsection{Proposed Student Architectures}
+
+The four models for which training data and performance will be evaluated each have similar input and output specifications to the DLoc models.  Each model takes as its input the four-channel image that is generated from the CSI measurements from the WiFi access points, and it outputs a heatmap of the same spatial dimensions as the input image but with only a single channel (where a Gaussian bump at the peak indicates the location of the device).
+
+\subsubsection{MobileNetV2 Student}
+
+The MobileNetV2 student \[cite: MobileNetV2\] model incorporates the MobileNetV2 backbone in place of the ResNet-based encoder of the DLoc model.  Additionally, the MobileNetV2 model’s first convolutional layer is adapted to accept the four channels of input from the WiFi access points.  A decoder head then maps the features extracted by the MobileNetV2 model’s backbone to the heatmap output.  This model contains approximately 2.3 million parameters.
+
+\subsubsection{TinyCNN}
+
+TinyCNN is a minimal deep learning model that contains only three convolutional layers and two fully connected layers.  It contains approximately 47,000 parameters.  This minimal model is included to evaluate the limits of possible model sizes for this type of problem.
+
+\subsubsection{MobileNetV2-UNet}
+
+The MobileNetV2-UNet student \[cite: U-Net\] model incorporates the same MobileNetV2 backbone as the MobileNetV2 student model, but in addition includes skip connections between the MobileNetV2’s encoder and decoder.  More specifically, the MobileNetV2 model’s encoder is divided into four separate stages of the model, each with a different number of channels; the decoder’s stages concatenate the features from those encoder stages with the features from the decoder’s upsampled representations to create a heatmap.  Each of these stages contains a different number of filters; the first concatenates a 320-channel representation with a 96-channel representation, the second combines a 128-channel representation with a 32-channel representation, the third combines a 64-channel representation with a 24-channel representation, and the final stage has only the 32-channel representation of the encoder.  The MobileNetV2-UNet student model contains 2.41 million parameters.
+
+These skip connections are included because they allow the model to access the fine spatial features of the WiFi signal that are otherwise lost when the representation of that signal is compressed to the low-dimensional latent variable representation employed by the MobileNetV2 model.
+
+\subsubsection{State-Space (Mamba) Variant}
+
+The last model that will be evaluated in this thesis is a model based on the Mamba selective state-space model \[cite: Mamba\].  Whereas DLoc, the MobileNetV2 student, and the MobileNetV2-UNet student all treat the CSI input measurements as a two-dimensional image, the Mamba model treats the CSI measurements from each access point as a sequence of measurements.  Additionally, the Mamba student model contains only approximately 0.65 million parameters, making it the most compressed of the models that will be evaluated in this thesis.  Thus, the Mamba model is evaluated as a model with a different inductive bias than the other student models, and to test whether this bias is competitive with those other approaches to the CSI-to-heatmap problem.
+
+--- END OF BATCH 2 (next: Chapter 3 sections 3.4-3.6, Chapter 4, and Chapter 5 section 5.1) ---

@@ -1,0 +1,324 @@
+% =====================================================================
+%  DLoc Compression — Defense Q&A (Results & Discussion -> Conclusion)
+%  Self-contained: compile with pdfLaTeX (Overleaf-ready).
+% =====================================================================
+\documentclass[11pt]{article}
+
+\usepackage[a4paper,margin=2.2cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{tcolorbox}
+\tcbuselibrary{skins,breakable}
+\usepackage[hidelinks]{hyperref}
+
+\newtcolorbox{trap}[1][TRAP --- be careful]{%
+  colback=red!4, colframe=red!55!black, fonttitle=\bfseries, title=#1,
+  breakable, left=2mm, right=2mm, top=1mm, bottom=1mm}
+\newtcolorbox{safe}[1][Safe phrasing]{%
+  colback=green!5, colframe=green!45!black, fonttitle=\bfseries, title=#1,
+  breakable, left=2mm, right=2mm, top=1mm, bottom=1mm}
+
+% Q/A formatting
+\newcommand{\Q}[1]{\medskip\noindent\textbf{\textcolor{blue!50!black}{Q.}}\ \textbf{#1}\par\nopagebreak}
+\newcommand{\A}{\noindent\textbf{A.}\ }
+
+\title{\textbf{DLoc Compression --- Defense Q\&A}\\[2mm]
+\large Results \& Discussion, Findings, and Conclusion}
+\date{}
+\begin{document}
+\maketitle
+\tableofcontents
+\vspace{3mm}\hrule\vspace{3mm}
+
+\noindent This is an anticipated-questions bank for the defense. Numbers are exact. Red boxes mark
+\textbf{traps} --- questions where a loose answer can get you in trouble --- with the safe phrasing.
+
+% =====================================================================
+\section{In-Distribution Accuracy (Experiment 1)}
+% =====================================================================
+
+\Q{What does ``in-distribution'' mean, and what is the test set?}
+\A Train and test in the \emph{same} environment (July). We train on 17{,}574 July samples and test on a
+\textbf{held-out} 4{,}260-sample split of Session~2 (collected $\sim$1\,h later). It measures best-case
+accuracy --- ``can the model learn the mapping when nothing changes?''
+
+\Q{Is your in-distribution test set just the training data?}
+\A No. It is a \textbf{held-out} split never seen during training. Same \emph{environment} (so it is
+``in-distribution''), but genuinely held-out data, not memorized samples.
+
+\Q{Summarize the in-distribution results.}
+\A MobileNetV2 \textbf{matches} DLoc at 0.707\,m (7.2$\times$ smaller); MobileNetV2-UNet is best at
+\textbf{0.640\,m} (6.8$\times$ smaller); TinyCNN fails at 3.92\,m; Mamba fails at 10.56\,m.
+
+\Q{Why does MobileNetV2 match DLoc with 7$\times$ fewer parameters?}
+\A Because DLoc is \textbf{over-parameterized} for in-distribution modelling: 2.3M parameters are enough
+to learn the CSI$\to$location mapping, and depthwise-separable convolutions learn it efficiently.
+
+\Q{Why does the U-Net beat the plain MobileNetV2?}
+\A The \textbf{skip connections} carry fine, high-resolution spatial detail past the bottleneck, so the
+predicted bump is sharper --- 0.640\,m vs 0.707\,m.
+
+\Q{Why does TinyCNN fail?}
+\A It has only 47K parameters --- below the $\sim$2M \textbf{capacity floor}. With three conv layers it
+cannot represent both the per-AP features and the spatial mapping. No amount of training fixes too little
+capacity.
+
+\Q{Why does Mamba fail so badly (10.56\,m)?}
+\A \textbf{Architecture mismatch}, not lack of capacity. Mamba treats the input as a 1D sequence, but the
+target is a 2D spatial heatmap; flattening destroys spatial locality. It reaches its best at epoch~1 and
+degrades monotonically (train and test error rise together) --- which \emph{rules out overfitting}.
+
+\Q{Why didn't distillation improve in-distribution accuracy?}
+\A In-distribution, the teacher's output is nearly identical to the ground truth, so its supervision is
+\textbf{redundant}. Distillation helps only \emph{outside} the training distribution (noise,
+cross-session).
+
+% =====================================================================
+\section{U-Net Architecture and Scheduler (Experiment 1b)}
+% =====================================================================
+
+\Q{What is the difference between cosine and step learning-rate schedules?}
+\A Cosine \textbf{smoothly} anneals the LR from $10^{-4}$ to $\sim$0 over 120 epochs; step \textbf{halves}
+the LR every 20 epochs (a staircase). Both reach median 0.640\,m.
+
+\Q{Which scheduler is better, and by how much?}
+\A Cosine, marginally: same median (0.640), slightly tighter tails (P90 1.523 / P99 2.750 vs step's
+1.552 / 2.918). Its smooth decay toward zero in the last epochs fine-tunes the worst cases better. The
+\textbf{architecture dominates}; the scheduler has a small effect.
+
+\Q{Which exact model is the green ``U-Net'' curve in the CDF figure?}
+\A The \textbf{cosine-annealing, standalone} MobileNetV2-UNet (\texttt{unet\_cosine\_standalone\_best.pth}
+in \texttt{dump\_results.py}).
+
+% =====================================================================
+\section{Robustness (Experiment 2)}
+% =====================================================================
+
+\Q{How is robustness evaluated --- did you retrain?}
+\A No retraining. We take the in-distribution weights and apply corruptions to the test inputs: AP
+dropout, Gaussian noise ($\sigma{=}0.1,0.2$), attenuation (0.5$\times$ global, 0.3$\times$ one AP), and
+5$\times$5 Gaussian blur.
+
+\Q{What are the two headline robustness findings?}
+\A \textbf{Distillation $\to$ 3.4$\times$} noise robustness (MobileNetV2 at $\sigma{=}0.1$: 16.4 $\to$
+4.8\,m); \textbf{skip connections $\to$ 5.5$\times$} (standalone U-Net 3.0\,m vs MobileNetV2 16.4\,m).
+
+\Q{Why does distillation make a model more noise-robust?}
+\A The teacher's softer heatmaps act as \textbf{spatial label smoothing}; the student learns a smoother
+representation that noise perturbs less --- the spatial-regression analogue of soft targets in
+classification distillation.
+
+\Q{Why do skip connections give robustness?}
+\A When noise corrupts the deep bottleneck, the \textbf{clean shallow features bypass it} through the
+skips --- a second, uncorrupted information path the model can fall back on.
+
+\Q{Why does distillation \emph{harm} TinyCNN?}
+\A Too little capacity. TinyCNN spends its 47K parameters learning the teacher's model of AP
+interactions; when an AP drops at test time those assumptions become invalid and it has \textbf{no spare
+capacity to fall back on} (1-AP dropout: 7.9 $\to$ 13.6\,m). Hence the $\sim$2M capacity threshold.
+
+\Q{How did you discover the $\sim$2M capacity threshold?}
+\A By toggling distillation on/off across model sizes and watching its effect \textbf{flip sign}: it
+helped the $\geq$2M students (MobileNetV2 2.3M, U-Net 2.41M) but harmed 47K TinyCNN. The boundary lies
+between them, so we state ``roughly 2 million parameters.''
+
+\Q{Why ``complementary but not additive''?}
+\A Skips and distillation fix robustness by \emph{different} mechanisms (bypassing the bottleneck vs
+smoothing the representation), so they don't simply add. On the U-Net under noise, the standalone (skips
+only) is 3.0\,m and adding distillation gives 3.47\,m --- the skip robustness already dominates. Skips
+protect against high noise; distillation protects against multi-AP dropout.
+
+\Q{Which corruption is worst, and why?}
+\A \textbf{Gaussian noise} --- it \emph{adds fake structure} (false peaks the model can be fooled by),
+sending fragile models to 16\,m. Attenuation and blur only \emph{weaken or soften} the real signal (the
+true peak stays put), so they cause far smaller errors (blur barely moves the U-Net: 0.67\,m).
+
+% =====================================================================
+\section{Cross-Session Generalization (Experiment 3)}
+% =====================================================================
+
+\Q{What is leave-one-session-out (LOSO), and why use it?}
+\A Three folds; each trains on July + two August sessions and tests on the \textbf{held-out} August
+session. We use it because it is the \emph{exact protocol the DLoc paper used}, so the comparison is fair.
+
+\Q{Why train the U-Net standalone (not distilled) for cross-session?}
+\A Distillation needs a teacher trained on the same data; to distill per fold we would have to retrain a
+16.5M DLoc teacher each time --- expensive and it would make the DLoc comparison unfair. Standalone is
+what is directly comparable to DLoc's published numbers.
+
+\Q{Give the cross-session results.}
+\A Median 0.852 / 0.822 / 1.116\,m on Aug16\_1 / Aug16\_3 / Aug16\_4\_ref (mean \textbf{0.930\,m}) vs
+DLoc's 0.71 / 0.82 / 1.05 (mean 0.86), at 6.8$\times$ fewer parameters. We \textbf{match} DLoc on the
+different-furniture fold and have a \emph{lower} P90 on the reflector fold.
+
+\Q{Why is the reflector fold the hardest?}
+\A An \textbf{aluminum reflector} is an almost ideal WiFi mirror; it injects strong specular ``phantom''
+reflections (extra fake blobs), the most severe input distortion.
+
+\Q{Why is DLoc slightly better on the reflector fold ($\sim$0.07\,m)?}
+\A DLoc's \textbf{consistency decoder} enforces agreement across APs, which helps most under strong
+specular multipath; our single-decoder U-Net has no such mechanism. The gap is small and expected.
+
+\Q{How do you know the cross-session result isn't luck?}
+\A Three random seeds (42/123/777) per fold; the median standard deviation is only 0.016--0.044\,m ---
+stable.
+
+\Q{Why use median error rather than mean?}
+\A The median is robust to a few wild outliers (ambiguous locations) and is the metric the DLoc paper
+reports, so it keeps the comparison like-for-like. We also report P90/P99 and CDFs for the tails.
+
+% =====================================================================
+\section{Zero-Shot Cross-Session (Experiment 4)}
+% =====================================================================
+
+\Q{What is the zero-shot evaluation, and why isn't it the DLoc comparison?}
+\A Train on July \emph{only}, test on the August sessions (never seen). It is the harshest domain shift,
+used as an internal \textbf{ablation} to compare architectures/distillation --- deliberately \emph{not} a
+fair DLoc comparison.
+
+\Q{What did zero-shot show?}
+\A Error rises across the August sessions and is highest on the reflector for \emph{every} model --- a
+difficulty hierarchy that is a property of the \textbf{environment}, not the model. Distillation helped
+only on the hardest (reflector) fold (e.g.\ U-Net $1.334 \to 1.281$\,m).
+
+% =====================================================================
+\section{Multi-Seed Validation and Statistics (Experiment 5)}
+% =====================================================================
+
+\Q{Why train the baseline with three seeds?}
+\A To show the student-vs-baseline gap is not due to random initialization --- to characterize the
+baseline's seed-to-seed variance.
+
+\Q{What is the multi-seed baseline result?}
+\A $0.875 \pm 0.036$\,m (seeds 0.825 / 0.906 / 0.894), over 120 epochs.
+
+\Q{Why is the multi-seed baseline (0.875) higher than the single run (0.707)?}
+\A The multi-seed runs use the full 120-epoch schedule; because StepLR ($\gamma{=}0.9$) \textbf{never
+decays the LR to zero}, longer training drifts slightly upward. The 0.707\,m was a favorable 50-epoch run.
+
+\Q{Is the U-Net's improvement statistically significant?}
+\A Yes. The U-Net's 0.640\,m is \textbf{6.5 standard deviations} below the multi-seed baseline mean
+(0.875\,m, std 0.036) --- far larger than seed noise.
+
+\Q{Why does P99 vary so much across seeds ($\pm6.8$\,m)?}
+\A P99 depends on a \emph{few} inherently ambiguous locations whose accuracy varies between seeds; with
+so few samples driving it, it is a noisy statistic (CV 52\%), unlike the stable median (CV 4.1\%).
+
+% =====================================================================
+\section{Computational Efficiency (Experiment 6)}
+% =====================================================================
+
+\Q{Quantify the compression.}
+\A U-Net: 2.41M params (6.8$\times$), \textbf{1.45\,GFLOPs} (56$\times$ less than DLoc's 81.06\,G), and
+\textbf{27.2\,ms} CPU (10$\times$ faster than 270.9\,ms); also 3.6$\times$ faster on GPU.
+
+\Q{Why is the FLOP reduction (56$\times$) bigger than the parameter reduction (6.8$\times$)?}
+\A \textbf{Depthwise-separable convolutions} replace DLoc's full convolutions; they cut the multiply-add
+operations far more than they cut the raw parameter count.
+
+\Q{Why report CPU latency specifically?}
+\A CPU is the platform most representative of \textbf{edge deployment} (IoT gateways, APs, phones without
+a GPU) --- the whole motivation for compressing DLoc.
+
+\Q{Which model is the ``DLoc'' efficiency figure?}
+\A Its test-time subnet (encoder + location decoder); the consistency/offset decoder is training-only and
+excluded.
+
+% =====================================================================
+\section{Knowledge Distillation (concepts)}
+% =====================================================================
+
+\Q{Is the teacher the same as the baseline?}
+\A Yes --- one trained DLoc model (16.5M), in two roles: \textbf{baseline} = the accuracy yardstick;
+\textbf{teacher} = the output source for distillation.
+
+\Q{Do you copy the teacher's weights into the student?}
+\A No. We run the teacher \emph{once} to record its output heatmaps (cached, $\sim$4.09\,GB train /
+0.99\,GB test via \texttt{precompute\_teacher.py}); the student learns its \textbf{own} weights by
+matching both the ground truth and those cached outputs. The teacher's weights are never updated and are
+not loaded during student training.
+
+\Q{Write the distillation loss.}
+\A $L = 0.7\,\mathrm{MSE}(\hat{y}, y_{\text{true}}) + 0.3\,\mathrm{MSE}(\hat{y}, y_{\text{teacher}})$,
+i.e.\ $\alpha{=}0.7$, $\beta{=}0.3$. Standalone sets $\beta{=}0$.
+
+\Q{Why is this distillation ``dual-natured''?}
+\A The same soft-target signal \emph{helps} robustness/generalization for models with capacity but
+\emph{harms} the smallest model (TinyCNN) --- two opposite effects depending on capacity.
+
+\Q{How does the U-Net get a ``clean-signal'' benefit like DLoc's consistency decoder without having one?}
+\A Both keep the clean signal alive past the noisy bottleneck. DLoc \emph{trains a second decoder} to
+reconstruct clean heatmaps; the U-Net \emph{wires the clean shallow features straight through} with skip
+connections --- same goal, achieved structurally for free (no extra decoder, fewer parameters).
+
+% =====================================================================
+\section{Findings and Conclusion}
+% =====================================================================
+
+\Q{State the thesis's main conclusion in one sentence.}
+\A A model roughly an order of magnitude smaller than DLoc achieves the same accuracy --- and
+architectural (skip connections) and training-based (distillation) choices each buy measurable
+robustness, with distillation only helping above a $\sim$2M capacity floor.
+
+\Q{What is your practical recommendation?}
+\A The distilled MobileNetV2-UNet is the best all-rounder (0.640\,m, competitive cross-session,
+6.8$\times$ smaller, best under multi-AP dropout, 56$\times$ cheaper). If pure noise robustness matters,
+the \emph{standalone} U-Net; if maximum compression matters, the distilled plain MobileNetV2 (0.707\,m,
+2.3M).
+
+\Q{What are the limitations?}
+\A Single building (Jacobs Hall) --- no cross-building test; the median is pixel-quantized
+($\sim0.1\sqrt{n}$), so results within $\sim$0.1\,m are effectively equal; and we compare to DLoc's
+published numbers, not a re-run of DLoc under identical conditions.
+
+\Q{What is the future work?}
+\A Deploy on real edge hardware and collect a new multi-building dataset (e.g.\ at E-JUST) to test
+cross-building generalization.
+
+% =====================================================================
+\section{Trap Questions (answer carefully)}
+% =====================================================================
+
+\begin{trap}[``You beat the published DLoc'' --- did you?]
+The DLoc paper reports \textbf{64\,cm} (complex space, the setup you compare to) and 65\,cm headline.
+Your U-Net's 0.640\,m \textbf{ties} the published 0.64\,m on median (and is slightly better on the tail:
+P90 1.52 vs 1.6, P99 2.75 vs 3.2). Your ``9.5\% improvement'' is vs your \emph{own} re-implementation
+(0.707\,m), \emph{not} the published number.
+\end{trap}
+\begin{safe}
+``Our U-Net \textbf{matches DLoc's published 0.64\,m} median (with a slightly tighter tail) at
+6.8$\times$ fewer parameters, and improves \textbf{9.5\% over our own faithful re-implementation}
+(0.707\,m).''
+\end{safe}
+
+\begin{trap}[``Is 9.5\% the seed-vs-seed comparison?'']
+No. 9.5\% is U-Net 0.640 vs the \emph{single} baseline run 0.707. There are \textbf{no in-distribution
+U-Net seeds} (multi-seed was run for the baseline only; the U-Net's 3 seeds are for cross-session). The
+seed comparison is the separate \textbf{6.5$\sigma$} statement against the multi-seed baseline (0.875).
+\end{trap}
+
+\begin{trap}[``Your medians are identical (0.640) across U-Net variants --- is that data leakage?'']
+No --- it is \textbf{metric quantization}. The error lives on a 0.1\,m pixel grid, so the median snaps to
+a $\sim0.1\sqrt{n}$ lattice; near-identical models land on the same lattice point. That is why we also
+report mean, P90/P99, and CDFs, which \emph{do} separate them.
+\end{trap}
+
+\begin{trap}[``Mamba just needed more training / tuning'']
+No. Its best epoch is the \emph{first} one and train+test error rise together afterwards --- that is the
+signature of an \textbf{architectural mismatch} (1D sequence vs 2D heatmap), not under-training or
+overfitting. More epochs make it worse, not better.
+\end{trap}
+
+\begin{trap}[``In-distribution and cross-session --- which 0.6/0.9 number is which?'']
+\textbf{0.640\,m = in-distribution} (same July session, optimistic). \textbf{0.930\,m = cross-session
+LOSO} (held-out August environment, honest). Never mix them.
+\end{trap}
+
+\begin{trap}[``Why is your multi-seed baseline (0.875) worse than your headline baseline (0.707)?'']
+Different schedule length: the multi-seed runs are 120 epochs and StepLR ($\gamma{=}0.9$) never decays the
+LR to zero, so longer training drifts up. Both are honestly reported; the U-Net (0.640) beats \emph{both}.
+\end{trap}
+
+\end{document}

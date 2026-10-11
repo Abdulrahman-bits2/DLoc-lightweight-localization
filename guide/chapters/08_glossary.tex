@@ -1,0 +1,155 @@
+%% ====================================================================
+%%  Appendix A — Glossary, Symbols, and Cheat-Sheet
+%% ====================================================================
+\chapter{Glossary, Symbols, and Cheat-Sheet}
+\label{app:glossary}
+
+A quick-reference appendix: the vocabulary, the symbols, the numbers you should be able to recite, and
+a one-table scorecard for all five models.
+
+\section{Glossary of terms}
+\label{app:glossary:terms}
+
+\begin{description}[leftmargin=0pt,style=nextline,nosep]
+  \item[AoA (Angle of Arrival)] The direction a signal arrives from, recovered from the phase
+  progression across an AP's antennas (Sec.~\ref{sec:found:aoa}).
+  \item[AP (Access Point)] A WiFi base station; the Jacobs Hall setup uses four, one per input channel.
+  \item[Bottleneck] The smallest, deepest representation in an encoder--decoder, where spatial detail
+  is most compressed ---and most easily lost (Sec.~\ref{sec:blocks:encdec}).
+  \item[CDF (Cumulative Distribution Function)] Fraction of predictions with error $\le d$, plotted
+  against $d$; up-and-left is better (Sec.~\ref{sec:eval:cdf}).
+  \item[CSI (Channel State Information)] The complex per-subcarrier, per-antenna channel estimate WiFi
+  hardware computes; the raw signal we localize from (Sec.~\ref{sec:found:csi}).
+  \item[Dark knowledge] The inter-class (here, inter-location) structure encoded in a teacher's soft
+  output that a hard label omits (Sec.~\ref{sec:distill:hinton}).
+  \item[Depthwise-separable convolution] A convolution factorized into a per-channel spatial mix
+  (depthwise) and a $1\times1$ channel mix (pointwise), $\sim$$8$--$9\times$ cheaper
+  (Sec.~\ref{sec:blocks:dwsep}).
+  \item[Distillation (knowledge)] Training a small student to match a large teacher's soft outputs;
+  here it acts as spatial label smoothing (Ch.~\ref{ch:distill}).
+  \item[Encoder--decoder] The hourglass architecture: downsample to a latent, then upsample to an
+  output (Sec.~\ref{sec:blocks:encdec}).
+  \item[FLOPs] Floating-point operations per forward pass; the compute cost per prediction
+  (Sec.~\ref{sec:eval:efficiency}).
+  \item[Heatmap] A 2D map over the floor whose peak (argmax) is the predicted location.
+  \item[InstanceNorm] Per-sample feature normalization preferred over BatchNorm for image translation;
+  used throughout DLoc.
+  \item[Inverted residual] MobileNetV2's block: expand $\to$ depthwise $\to$ project, with a skip on the
+  \emph{narrow} bottleneck and a linear (no-ReLU) projection (Sec.~\ref{sec:blocks:invres}).
+  \item[LOSO (Leave-One-Session-Out)] Cross-session protocol holding out one session per fold; matches
+  DLoc's published protocol, so it is the fair comparison (Sec.~\ref{sec:eval:crosssession}).
+  \item[Mamba / SSM] A selective state-space sequence model; processes a 1D sequence, which mismatches
+  the 2D heatmap target (Sec.~\ref{sec:blocks:mamba}).
+  \item[MobileNetV2] An edge-oriented backbone built from depthwise-separable inverted residuals; our
+  students' encoder (Sec.~\ref{sec:blocks:invres}).
+  \item[Multipath] Multiple reflected copies of a signal arriving together; breaks classical geometry
+  and GPS indoors (Sec.~\ref{sec:found:gps}).
+  \item[NLOS (Non-Line-of-Sight)] No direct path between device and AP; the regime where learned
+  methods beat analytic ones (Sec.~\ref{sec:found:why_dl}).
+  \item[OFDM] The WiFi scheme that splits a signal across many subcarriers, giving per-frequency CSI
+  (Sec.~\ref{sec:found:csi}).
+  \item[P90 / P99] The 90th/99th-percentile error; the tail and near-worst case
+  (Sec.~\ref{sec:eval:stats}).
+  \item[Quantization (of error)] Achievable errors are multiples of $0.1\sqrt{n}$, so identical medians
+  can hide different distributions (Sec.~\ref{sec:eval:quant}).
+  \item[Residual / skip connection] An additive shortcut ($y=\mathcal{F}(x)+x$) that eases training of
+  deep nets (Sec.~\ref{sec:blocks:resnet}).
+  \item[Soft targets] A teacher's full output distribution used as a training signal, as opposed to a
+  hard label (Sec.~\ref{sec:distill:hinton}).
+  \item[Specular multipath] Mirror-like reflection (e.g.\ from the aluminum panel) that creates phantom
+  locations; makes the reflector session hardest (Sec.~\ref{sec:eval:sessions}).
+  \item[Standalone vs distilled] The two training modes: ground-truth only, versus ground-truth plus
+  cached teacher output (Sec.~\ref{sec:distill:loss}).
+  \item[ToF (Time of Flight)] Signal travel time, recovered from phase across subcarriers; corrupted by
+  the unknown clock offset (Sec.~\ref{sec:found:aoa}--\ref{sec:found:offset}).
+  \item[U-Net skip] A \emph{concatenative} encoder$\to$decoder shortcut that restores high-resolution
+  detail past the bottleneck (Sec.~\ref{sec:blocks:unet}).
+  \item[WILD] The WiFi indoor localization dataset (Jacobs Hall, UC San Diego) used for all experiments
+  (Sec.~\ref{sec:eval:sessions}).
+  \item[Zero-shot evaluation] Train on the two July sessions only, test on August; an internal ablation,
+  not a DLoc comparison (Sec.~\ref{sec:eval:crosssession}).
+\end{description}
+
+\section{Symbol table}
+\label{app:glossary:symbols}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Symbols used in this guide and the thesis.}
+\begin{tabular}{@{}cl@{}}
+\toprule
+\textbf{Symbol} & \textbf{Meaning} \\
+\midrule
+$H_i$ & complex CSI matrix at access point $i$ \\
+$N_{\text{sub}},\,N_{\text{ant}},\,N_{\text{AP}}$ & number of subcarriers, antennas, access points (4) \\
+$y$ & ground-truth Gaussian heatmap \\
+$\hat{y}$ & student's predicted heatmap \\
+$y_T$ & teacher's (precomputed) output heatmap \\
+$\alpha,\;\beta$ & distillation loss weights ($0.7,\;0.3$) \\
+$e$ & localization error, $0.1\,\lVert\arg\max\hat y-\arg\max y\rVert_2$ (m) \\
+$\sigma$ & Gaussian-noise standard deviation ($0.1$ or $0.2$) \\
+$D_k$ & convolution kernel size (e.g.\ 3) \\
+$M,\;N$ & input / output channel counts of a convolution \\
+$D_F$ & spatial size of a feature map \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Key-numbers cheat-sheet}
+\label{app:glossary:numbers}
+
+Memorize these; they answer most quantitative questions.
+
+\begin{table}[H]
+\centering
+\small
+\caption{The numbers to know cold.}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Quantity} & \textbf{Value} \\
+\midrule
+DLoc baseline size / compute & 16.5\,M params, 81.06\,GFLOPs, 270.9\,ms CPU \\
+DLoc in-dist median (our repro / paper) & 0.707\,m / 0.64\,m \\
+DLoc multi-seed median & $0.875 \pm 0.036$\,m (CV 4.1\%) \\
+MobileNetV2 & 2.3\,M, $7.2\times$, 0.707\,m (lossless) \\
+TinyCNN & 47\,K, $351\times$, 3.922\,m (below floor) \\
+\textbf{MobileNetV2-UNet} & \textbf{2.41\,M, $6.8\times$, 0.640\,m} (9.5\% better, $6.5\sigma$) \\
+Mamba & 0.65\,M, $25\times$, 10.56\,m (mismatch) \\
+Distillation noise gain (MobileNetV2, $\sigma{=}0.1$) & $16.368 \to 4.769$\,m ($3.4\times$) \\
+Skip-connection noise gain (U-Net standalone) & 16.368 $\to$ 3.000\,m ($5.5\times$) \\
+KD capacity threshold & $\sim$2\,M parameters \\
+U-Net efficiency vs DLoc & $56\times$ fewer FLOPs, $10\times$ less CPU latency \\
+U-Net cross-session (LOSO, 3 seeds) & 0.852 / 0.822 / 1.116\,m; mean 0.930 vs DLoc 0.86 \\
+Distillation weights & $\alpha = 0.7$, $\beta = 0.3$ \\
+Dataset & 4 APs, $161\times361$ @ 0.1\,m; 17{,}574 train / 4{,}260 test; 5 sessions \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Model scorecard}
+\label{app:glossary:scorecard}
+
+\begin{table}[H]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\caption{One-row-per-model scorecard. ``KD effect'' is distillation's net effect on robustness.}
+\begin{tabular}{@{}lrrcccl@{}}
+\toprule
+\textbf{Model} & \textbf{Params} & \textbf{FLOPs} & \textbf{In-dist} & \textbf{Noise $\sigma{=}0.1$} & \textbf{KD effect} & \textbf{Defining reason} \\
+ & & & \textbf{(m)} & \textbf{(median, m)} & & \\
+\midrule
+DLoc          & 16.5M & 81.06G & 0.707 & --- & teacher & over-parameterized; has consistency decoder \\
+MobileNetV2   & 2.3M  & 1.28G  & 0.707 & 16.4$\to$4.8 & \best{helps} & lossless compression; bottleneck = noise-fragile \\
+TinyCNN       & 47K   & 0.66G  & 3.922 & $\sim$9.4 & \worst{harms} & below capacity floor \\
+MobileNetV2-UNet & 2.41M & 1.45G & \best{0.640} & \best{3.0} & helps (dropout) & skips restore detail + robustness \\
+Mamba         & 0.65M & --- & \worst{10.56} & --- & --- & 1D-sequence vs 2D-heatmap mismatch \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\vspace{1em}
+\noindent\emph{This guide is a companion to the thesis and the \code{docs/} reference set; every number
+above is sourced from the thesis tables and reproducible from the released weights and data on the
+Hugging Face Hub (\code{JustAGeek/dloc-code}, \code{JustAGeek/dloc-wild-fig10b}).}

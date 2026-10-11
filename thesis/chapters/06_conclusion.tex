@@ -1,0 +1,55 @@
+%% ====================================================================
+%%  Chapter 6 — Conclusion
+%% ====================================================================
+\chapter{Conclusion}
+\label{ch:conclusion}
+
+This thesis investigated whether the computational cost of DLoc was inherent to the task of localizing
+devices via WiFi signals, or whether it represented over-parameterization of the model that could be
+removed via model distillation or architectural alterations. The model was compressed into a family of
+models of various sizes, trained both independently of DLoc and distilled from the DLoc model, and
+evaluated along five dimensions: in-distribution accuracy, robustness, cross-session accuracy,
+statistical validation, and computational cost. These evaluations lead to the following six findings.
+
+First, it is possible to create a model that is extremely small relative to DLoc but still achieves the
+same in-distribution accuracy; the MobileNetV2 model, with only 2.3~million parameters, achieves an
+accuracy of 0.707\,m---a $7.2\times$ reduction in model size.
+
+Second, the inclusion of skip connections in the MobileNetV2 model allows the resulting model to achieve
+accuracy better than that of the DLoc baseline. An accuracy of 0.640\,m is achieved with the
+MobileNetV2-UNet at 2.41~million parameters, a 9.5\% improvement over DLoc, with a model that is
+$6.8\times$ smaller than DLoc.
+
+Third, knowledge distillation acts as a method of increasing the robustness of the student model rather
+than its accuracy. Accuracy is the same for the standalone and distilled models in the normal
+in-distribution case, but the distilled models show improvements in the presence of noise ($3.4\times$
+improvement) and in generalization to cross-session test folds.
+
+Fourth, there is a minimum student-model size required to benefit from knowledge distillation. This
+threshold is around 2~million parameters: the MobileNetV2-UNet (2.41M) and the MobileNetV2 (2.3M) lie
+above it, but the TinyCNN, with only 47{,}000 parameters, lies below it, and distilling it degrades its
+accuracy under AP dropout.
+
+Fifth, the two methods of increasing the robustness of the model are complementary rather than additive.
+Both the skip connections and knowledge distillation increase the robustness of the MobileNetV2-UNet, but
+each helps most against a different type of corruption: the skip connections provide a $5.5\times$
+improvement in noise robustness, while knowledge distillation most improves resilience under multi-AP
+dropout. The two mechanisms are therefore complementary rather than additive.
+
+Sixth, the cross-session accuracy of the MobileNetV2-UNet is competitive relative to the cost of the
+model. Using the same leave-one-session-out protocol as DLoc, with three random seeds, the
+MobileNetV2-UNet achieves median errors of 0.852\,m, 0.822\,m, and 1.116\,m on the three held-out August
+sessions, averaging 0.930\,m against the published DLoc's 0.86\,m. It matches DLoc on the
+different-furniture fold (0.822 vs.\ 0.82\,m) and remains level on the P90 metric, all at $6.8\times$
+fewer parameters than DLoc.
+
+These findings indicate that it is possible to achieve accurate WiFi-based localization by combining the
+architectural design of the MobileNetV2-UNet (with skip connections) and the training strategy of
+knowledge distillation. Each method resolves a different limitation: the skip connections resolve the
+information loss that limits the spatial accuracy of the model, while knowledge distillation helps the
+model generalize across distribution shifts in the WiFi signal. The distilled MobileNetV2-UNet achieves
+an in-distribution accuracy of 0.640\,m, attains competitive cross-session accuracy, exhibits the best
+results under multiple AP failures, and requires $56\times$ fewer floating-point operations and
+$10\times$ less CPU inference time than DLoc. The cost of DLoc is therefore not inherent to WiFi-based
+localization; a model at least an order of magnitude smaller than DLoc can meet or exceed its accuracy,
+supporting its use in the edge devices for which WiFi-based indoor localization will be most useful.

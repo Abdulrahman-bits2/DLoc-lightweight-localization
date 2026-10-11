@@ -1,0 +1,220 @@
+%% ====================================================================
+%%  Chapter 3 — Methodology
+%% ====================================================================
+\chapter{Methodology}
+\label{ch:methodology}
+
+This chapter describes the system, data, models, and evaluation methods employed in this thesis. First,
+we review the DLoc system that introduced the CSI-to-heatmap problem. Second, we describe the WILD
+dataset on which our experiments are based. Third, we describe the four models evaluated in this thesis.
+Finally, we describe the experiments performed to evaluate each of the models.
+
+\section{Overview of the DLoc System Architecture}
+\label{sec:method:dloc}
+
+The DLoc system~\cite{ayyalasomayajula2020deep} frames the indoor localization problem as an
+image-to-image translation problem. The image provided to the system is built from the CSI measurements
+collected from the WiFi access points, and the system outputs a heatmap that represents the location of
+the device emitting the WiFi signal. More specifically, each of the four access points provides a
+two-dimensional representation of the CSI measurements collected from that access point, and these
+representations are stacked together into a four-channel image; the heatmap output by the system has the
+same spatial dimensions as the input image but only a single channel, and contains a Gaussian bump
+indicating the location of the device at a spatial resolution of $0.1$\,m per pixel.
+
+DLoc's architecture consists of a ResNet encoder~\cite{he2016resnet} and a location decoder. The ResNet
+encoder contains six residual blocks with 64 filters each, and compresses the four-channel image into a
+high-dimensional representation. The location decoder then upsamples this representation to the size of
+the original image to generate the heatmap. Additionally, DLoc employs a second decoder that outputs an
+``offset'' heatmap to ensure that the outputs of the four access points are consistent with the location
+of the device being localized. The DLoc model has an approximate parameter count of 16.5~million
+parameters. The location of the device is determined by applying a sigmoid function to the output of the
+location decoder and finding the peak of the resulting heatmap.
+
+The training loss of DLoc is defined as a combination of the difference between the predicted and target
+heatmaps and the offset heatmap, and the Adam optimizer ($\beta_1 = 0.5$) is used to minimize this objective. The
+DLoc system is utilized in this thesis in two ways: as a baseline model against which the other models
+are compared in terms of both accuracy and efficiency, and as the teacher in the training of the
+knowledge-distilled student models.
+
+\section{The WILD Dataset}
+\label{sec:method:dataset}
+
+All experiments are performed upon the WILD (WiFi-based Indoor Localization Dataset) dataset, which was
+collected in the Jacobs Hall building at UC San Diego~\cite{ayyalasomayajula2020deep}. The dataset was
+collected from four access points during five different data-collection sessions. Each collection
+session took place under slightly different environmental conditions, as summarized in
+Table~\ref{tab:method:sessions}.
+
+More specifically, Sessions 1 and 2 (named \texttt{jacobs\_Jul28} and \texttt{jacobs\_Jul28\_2})
+occurred within one hour of each other and used the same environmental conditions. During training, the
+training data from Session 1 and the training data from Session 2 were both used to train the model;
+during testing, the test data from Session 2 was used to evaluate the model. Sessions 3, 4, and 5
+occurred three weeks later, during which the rooms where the measurements were collected were altered in
+arbitrary ways (Session 3), given a different furniture layout (Session 4), or fitted with an aluminum
+panel used to reflect the WiFi signal (Session 5).
+
+\begin{table}[H]
+\centering
+\caption{The five WILD collection sessions used in this thesis.}
+\label{tab:method:sessions}
+\begin{tabular}{@{}llrl@{}}
+\toprule
+\textbf{Session} & \textbf{Tag} & \textbf{Samples} & \textbf{Condition} \\
+\midrule
+1 & \texttt{jacobs\_Jul28}        & ---     & training (reference conditions) \\
+2 & \texttt{jacobs\_Jul28\_2}     & 4{,}260$^\dagger$ & in-distribution test (1\,h later, identical) \\
+3 & \texttt{jacobs\_Aug16\_1}     & 11{,}201 & furniture rearrangement \\
+4 & \texttt{jacobs\_Aug16\_3}     & 8{,}754  & different furniture configuration \\
+5 & \texttt{jacobs\_Aug16\_4\_ref}& 5{,}486  & aluminum reflector (specular multipath) \\
+\bottomrule
+\end{tabular}
+
+\vspace{0.4em}
+{\footnotesize $^\dagger$ Held-out test split; Sessions~1+2 together provide 17{,}574 training
+samples.}
+\end{table}
+
+\section{Proposed Student Architectures}
+\label{sec:method:students}
+
+The four models evaluated in this thesis have the same input and output specifications as the DLoc
+model. Each model takes as its input the four-channel image generated from the CSI measurements of the
+WiFi access points, and outputs a heatmap of the same spatial dimensions as the input image but with a
+single channel, where a Gaussian bump at the peak indicates the location of the device. The four
+students are summarized in Table~\ref{tab:method:architectures}.
+
+\begin{table}[H]
+\centering
+\footnotesize % Minimized the text size for a smaller footprint
+\setlength{\tabcolsep}{4pt} % Minimized the column spacing to tighten the table
+\caption{Summary of the proposed student architectures and the DLoc teacher.}
+\label{tab:method:architectures}
+\begin{tabular}{@{}lrcl@{}}
+\toprule
+\textbf{Model} & \textbf{Parameters} & \textbf{Compression} & \textbf{Architecture highlights} \\
+\midrule
+DLoc baseline (teacher) & 16.5M & $1\times$ & ResNet encoder + location + offset decoders \\
+MobileNetV2 & 2.3M & $7.2\times$ & depthwise-separable, inverted residuals \\
+TinyCNN & 47K & $351\times$ & 3 conv + 2 FC layers \\
+MobileNetV2-UNet & 2.41M & $6.8\times$ & MobileNetV2 encoder + U-Net skip connections \\
+Mamba & 0.65M & $25\times$ & selective state-space sequence model \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{MobileNetV2 Student}
+\label{sec:method:mobilenet}
+
+The MobileNetV2 student~\cite{sandler2018mobilenetv2} incorporates the MobileNetV2 backbone in place of
+the ResNet-based encoder of the DLoc model. The MobileNetV2 model's first convolutional layer is adapted
+to accept the four channels of input from the WiFi access points. A decoder head then maps the features
+extracted by the MobileNetV2 backbone to the heatmap output. This model contains approximately
+2.3~million parameters.
+
+\subsection{TinyCNN}
+\label{sec:method:tinycnn}
+
+TinyCNN is a minimal deep learning model that contains only three convolutional layers and two fully
+connected layers. It contains approximately 47{,}000 parameters. This minimal model is included to
+evaluate the limits of possible model sizes for this type of problem.
+
+\subsection{MobileNetV2-UNet}
+\label{sec:method:unet}
+
+The MobileNetV2-UNet student~\cite{ronneberger2015unet} incorporates the same MobileNetV2 backbone as the
+MobileNetV2 student, but in addition includes skip connections between the MobileNetV2 encoder and
+decoder. The encoder is divided into four separate stages, each with a different number of channels; the
+decoder concatenates the features from those encoder stages with the features from the decoder's
+upsampled representations to create a heatmap. The first stage concatenates a 320-channel representation
+with a 96-channel representation, the second combines a 128-channel representation with a 32-channel
+representation, the third combines a 64-channel representation with a 24-channel representation, and the
+final stage uses only the 32-channel representation. The MobileNetV2-UNet student contains 2.41~million
+parameters, and is illustrated in Figure~\ref{fig:method:unet_arch}.
+
+These skip connections are included because they allow the model to access the fine spatial features of
+the WiFi signal that are otherwise lost when the representation of that signal is compressed to the
+low-dimensional latent representation employed by the MobileNetV2 model.
+
+\begin{figure}[H]
+\centering
+\resizebox{\linewidth}{!}{\input{figures/unet_arch_body.tex}}
+\caption{The MobileNetV2-UNet student. A MobileNetV2 encoder (light blue) downsamples the four-channel
+CSI input; a decoder (dark blue) upsamples back to full resolution; teal dashed arcs are the U-Net skip
+connections that concatenate encoder feature maps into the decoder at matching resolutions, bypassing the
+bottleneck (deep blue). The head applies a $1{\times}1$ convolution and a sigmoid. Layer specifications
+are exact, taken from the implementation.}
+\label{fig:method:unet_arch}
+\end{figure}
+
+\subsection{State-Space (Mamba) Variant}
+\label{sec:method:mamba}
+
+The last model evaluated in this thesis is based on the Mamba selective state-space
+model~\cite{gu2023mamba}. Whereas DLoc, the MobileNetV2 student, and the MobileNetV2-UNet student all
+treat the CSI input as a two-dimensional image, the Mamba model treats the CSI measurements from each
+access point as a sequence. The Mamba student contains only approximately 0.65~million parameters, making
+it the most compressed of the models evaluated in this thesis. It is evaluated as a model with a
+different inductive bias from the other students, to test whether this bias is competitive with those
+other approaches to the CSI-to-heatmap problem.
+
+\section{Knowledge-Distillation Framework}
+\label{sec:method:distillation}
+
+Each student was trained in two modes: a standalone mode that used only the ground-truth heatmaps for
+supervision, and a distilled mode that additionally aimed to minimize the difference between its outputs
+and the teacher model's output. The objective function used for the distilled mode is a convex
+combination of the ground-truth heatmap term and the teacher-output term,
+\begin{equation}
+  \mathcal{L} \;=\; \alpha \cdot \mathrm{MSE}(\hat{y},\, y) \;+\; \beta \cdot \mathrm{MSE}(\hat{y},\, y_T),
+  \label{eq:method:distill}
+\end{equation}
+where $\hat{y}$ is the student's output, $y$ is the ground-truth heatmap, and $y_T$ is the teacher's
+precomputed output. The weights used in the combination are $\alpha = 0.7$ and $\beta = 0.3$. Because the
+teacher is fixed, its output is precomputed prior to training, so the teacher's forward pass is never
+invoked during the training of the students. Furthermore, because the teacher's targets are heatmaps
+rather than one-hot maps, its outputs are inherently ``soft'': the probability mass is spread around the
+true location rather than concentrated at a single point. These soft targets therefore encourage the
+students to reproduce the location of the target device as well as the probability mass around it, which
+acts as an implicit regularizer for the student models.
+
+\section{Experimental Design}
+\label{sec:method:design}
+
+The experiments performed on the proposed models are described below.
+
+\begin{enumerate}[leftmargin=2em]
+  \item In-distribution accuracy is measured on the test set from Session 2, to determine the accuracy of
+  the localization models and the cost of model compression.
+
+  \item The models are evaluated under various forms of signal degradation at test time, to determine
+  their robustness to real-world signal conditions. The corruptions applied include individual and random
+  AP dropout, Gaussian noise of $\sigma \in \{0.1, 0.2\}$, global and single-AP attenuation, and spatial
+  blur.
+
+  \item Cross-session generalization is evaluated within the original DLoc protocol (each fold trains on the two July sessions plus two of the
+  three August sessions, and tests on the held-out August session) as well as through a zero-shot evaluation in which the
+  student models are trained only on the two July sessions and evaluated on the August sessions.
+
+  \item The DLoc model is additionally trained using three different random seeds, to evaluate the
+  statistical significance of the reported results.
+
+  \item Lastly, the computational efficiency of each model is measured, an essential consideration for
+  potential deployment of the methods.
+\end{enumerate}
+
+\section{Evaluation Metrics}
+\label{sec:method:metrics}
+
+The primary evaluation metric is the localization error of the models, which is the distance between the
+predicted location (the peak of the predicted heatmap) and the location of the ground-truth heatmap. The
+distance between the two points is given by
+\begin{equation}
+  e \;=\; 0.1 \times \big\lVert \arg\max(\hat{y}) - \arg\max(y) \big\rVert_2 ,
+  \label{eq:method:error}
+\end{equation}
+scaled by the $0.1$\,m-per-pixel resolution of the CSI measurements. From the localization error for each
+sample, the median error, 90th-percentile error (P90), 99th-percentile error (P99), and mean error are
+calculated. Because the error is a scaled pixel distance, the achievable error values are quantized to
+multiples of $0.1\sqrt{n}$; as a result, two models can have identical median errors yet different full
+error distributions. In these cases the mean error and the error distribution itself are additionally
+reported.

@@ -1,0 +1,103 @@
+%% ====================================================================
+%%  Chapter 1 — Introduction
+%% ====================================================================
+\chapter{Introduction}
+\label{ch:introduction}
+
+\section{Background and Motivation}
+\label{sec:intro:background}
+
+Indoor localization is an essential task for many emerging technologies and applications. Examples of
+those applications range from the tracking of assets within large warehouses, the tracking of patients
+within a hospital, augmented reality applications, automated robotic systems, and various
+location-aware services within large public buildings. Outside of these buildings, the Global
+Positioning System (GPS) is typically utilized to determine the location of an object to within a few
+meters of its true location. GPS is, however, ineffective within indoor environments; the GPS signals
+are reflected and attenuated by the walls and ceilings that surround indoor locations.
+
+Alternative technologies have therefore been used for indoor localization for the past two decades.
+Technologies that use WiFi, Bluetooth, ultra-wideband signals, and inertial sensors have all been
+explored as alternatives to GPS for indoor localizing of objects or individuals.
+
+WiFi technology has been the focus of much of the research on indoor localization. WiFi signals are of
+interest because WiFi infrastructure is already installed throughout most buildings. Furthermore, the
+WiFi hardware installed at each access point (AP) provides Channel State Information (CSI). CSI
+describes the attenuation and phase of each of the subcarriers that are emitted by each AP. Because the
+attenuation of the signals to the WiFi devices is related to the distance between those devices and the
+APs, the CSI information can in principle allow an object to be localized to within sub-meter distances
+of its actual location.
+
+In order to determine a device's location within a floorplan, DLoc~\cite{ayyalasomayajula2020deep}
+utilizes techniques similar to image translation. The CSI from each of the APs is transformed into a
+multi-channel image, and a deep learning model with an encoder--decoder structure is trained to read
+the CSI from each AP and to output a spatial heatmap indicating the probability of the location of the
+object within the building. As a result, DLoc was able to achieve sub-meter accuracy in its
+localization results~\cite{ayyalasomayajula2020deep}.
+
+The accuracy that DLoc achieves is, however, at the cost of high model complexity. DLoc contains
+16.5~million parameters that are required to perform the localization. Thus, DLoc is not well suited
+for deployment upon edge devices such as IoT gateways and smartphones, whose computational and memory
+resources are limited.
+
+\section{Problem Definition}
+\label{sec:intro:problem}
+
+In order for WiFi localization models to be usefully deployed into indoor environments, the models must
+be accurate, robust, and efficient. While DLoc is accurate in localizing objects within a floorplan, it
+is not efficient in relation to the resources required for deployment to edge devices. A method of
+compressing DLoc such that an accurate, efficient model can be deployed upon edge devices is therefore
+required. Such a method of compression comes with several problems that must be resolved.
+
+The high parameter count of models like DLoc implies a high cost for deployment upon edge devices.
+Furthermore, it is not known how small a model can be while still achieving accurate localization.
+
+Accuracy is likely to be lost if a model is compressed to reduce its parameter count. An accurate model
+that is also compressed for efficiency is therefore desired.
+
+The signals used for WiFi localization are likely to be degraded during their transmission from AP to
+WiFi device. Localization models must therefore be robust against signal degradation.
+
+The indoor environments in which the objects to be localized are moving may change over time. The
+localization models must therefore be able to generalize to changes in the indoor environment.
+
+The results of training a model are dependent upon the random initialization of its weights. The
+localization model must therefore exhibit reproducibility in its results across different random
+initializations of its weights.
+
+The problem to be solved is therefore how to replace the DLoc model with a model that is an order of
+magnitude smaller yet maintains its localization accuracy, while additionally addressing the robustness
+and generalization of the model to changes in the indoor environment.
+
+\section{Project Objectives}
+\label{sec:intro:objectives}
+
+The goal of this project is to design, train, and evaluate a family of lightweight models that are
+compressed from the DLoc model, and to gain an understanding of the various mechanisms that affect their
+accuracy and robustness. The specific objectives of this project are as follows.
+
+\begin{enumerate}[leftmargin=2em]
+  \item To compress the DLoc model by training lightweight models (MobileNetV2, a minimal TinyCNN, and a
+  state-space Mamba model) to behave similarly to the teacher DLoc model; this allows us to measure the
+  accuracy of models that have reduced parameter counts.
+
+  \item To improve the accuracy of the models by using architectural designs (such as U-Net skip
+  connections) so that a model with fewer parameters can surpass the accuracy of the teacher DLoc.
+
+  \item To characterize the robustness of the models to signal degradation such as AP dropout, noise,
+  signal attenuation, and spatial blur.
+
+  \item To measure the generalization of the models across different sessions of WiFi measurements
+  within the indoor environment.
+
+  \item To validate the results of the experiments performed on the models, and to quantify the
+  computational efficiency of each of the models tested.
+\end{enumerate}
+
+The remainder of this thesis is dedicated to reviewing the relevant literature on indoor localization,
+knowledge distillation, efficient deep learning models, and robustness to signal degradation
+(Chapter~\ref{ch:literature}). Following that literature review is a description of the DLoc model, the
+WILD dataset, and each of the models to be tested in this thesis (Chapter~\ref{ch:methodology}).
+Chapter~\ref{ch:implementation} describes the details of how each of the models was implemented.
+Chapter~\ref{ch:results} describes the results of testing each of the models, and
+Chapter~\ref{ch:conclusion} draws conclusions from those results. Finally,
+Chapter~\ref{ch:futurework} proposes future work related to this thesis.

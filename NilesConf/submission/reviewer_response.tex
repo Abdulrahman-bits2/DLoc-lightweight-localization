@@ -1,0 +1,156 @@
+% =====================================================================
+%  Reviewer Response and Revision Summary  --  NILES 2026 camera-ready
+%  Manuscript: Edge-Efficient WiFi Indoor Localization via Lightweight Deep Learning and KD
+%  Compile with pdfLaTeX or Tectonic.
+% =====================================================================
+\documentclass[11pt]{article}
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage[hidelinks]{hyperref}
+
+\definecolor{ejblue}{RGB}{20,70,120}
+\definecolor{okgreen}{RGB}{22,120,60}
+\definecolor{tgrey}{RGB}{90,90,90}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt}
+\renewcommand{\arraystretch}{1.25}
+
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\small\color{tgrey}Reviewer Response and Revision Summary}
+\rhead{\small\color{tgrey}NILES 2026}
+\cfoot{\small\color{tgrey}\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% section styling
+\usepackage{titlesec}
+\titleformat{\section}{\large\bfseries\color{ejblue}}{\thesection.}{0.5em}{}
+\titleformat{\subsection}{\normalsize\bfseries\color{ejblue}}{\thesubsection}{0.5em}{}
+
+\newcommand{\status}[1]{\textbf{\color{okgreen}#1}}
+\newcommand{\concern}[1]{\textit{Reviewer concern.} #1}
+\newcommand{\response}[1]{\textbf{Response.} #1}
+
+\begin{document}
+
+% ---------- Title block ----------
+\begin{center}
+{\LARGE\bfseries\color{ejblue} Response to Reviewer Comments}\\[2pt]
+{\large\bfseries and Detailed Revision Summary}\\[10pt]
+\rule{\textwidth}{0.8pt}\\[8pt]
+{\large\textbf{Manuscript:} Edge-Efficient WiFi Indoor Localization via\\ Lightweight Deep Learning and Knowledge Distillation}\\[8pt]
+{\normalsize Abdulrahman M. A. Ebrahim, \ Ahmed E. A. Haggag, \ Fadwa Y. K. Mahmoud, \ Ehab H. Elshazly}\\[3pt]
+{\small\itshape Egypt-Japan University of Science and Technology (E-JUST), Alexandria, Egypt}\\[8pt]
+{\normalsize Accepted to NILES 2026 (minor revision) \quad$\bullet$\quad Prepared for the camera-ready revision \quad$\bullet$\quad September 2026}\\[6pt]
+\rule{\textwidth}{0.8pt}
+\end{center}
+
+\textbf{Purpose of this document.} We thank both reviewers for the positive assessment and the constructive comments. This document records each reviewer comment, our response, and the exact manuscript changes made in the camera-ready revision. All quantitative results are unchanged from the accepted version; the revision only clarifies the methodology, completes one table, adds one explanatory passage, and polishes the language and formatting.
+
+% ---------- 1. Executive summary ----------
+\section{Executive Summary}
+The revision addresses all points raised by the two reviewers without altering any experimental result. Reviewer~A's requests are handled by (i)~a language-and-formatting pass across the paper and (ii)~a substantially expanded description of the knowledge-distillation methodology and loss function. Reviewer~B's requests are handled by (iii)~adding the TinyCNN and Mamba results to Table~II as a clearly labelled sub-block and (iv)~a new passage explaining that a fold-specific teacher would be expected to \emph{improve} the leave-one-session-out (LOSO) result, which establishes the reported standalone U-Net as a conservative baseline. The camera-ready manuscript fits four pages---retaining both schematic figures (student architecture and framework overview, shown compactly side by side) and all five data tables---with the author block restored.
+
+\begin{center}
+\small
+\begin{tabularx}{\textwidth}{@{}c c L{5.6cm} c L{5.0cm}@{}}
+\toprule
+\textbf{\#} & \textbf{Rev.} & \textbf{Reviewer issue} & \textbf{Status} & \textbf{Revision outcome} \\
+\midrule
+1 & A & Minor revision needed for English and format & \status{Addressed} & Language pass across all sections; author block, reference spacing and equation formatting corrected. \\
+2 & A & Clarify the distillation methodology and loss equations & \status{Addressed} & Sec.~III-D expanded: soft-target heatmap defined, two training modes stated, each loss term explained, $\beta{=}0$ case noted. \\
+3 & B & TinyCNN and Mamba discussed in prose but absent from Table~II & \status{Addressed} & Added to Table~II as a labelled ``under-capacity / architecture-mismatch'' sub-block (median/P90/P99). \\
+4 & B & Explain whether a fold-specific teacher would improve LOSO & \status{Addressed} & New passage in Sec.~V-C: fold-specific teacher expected to lower LOSO error; standalone U-Net is therefore a conservative bound. \\
+\midrule
+-- & A & Overall assessment: well-structured, thoroughly evaluated, useful insights & \status{Acknowledged} & With thanks; no change required. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+% ---------- Reviewer A ----------
+\section{Reviewer A}
+
+Reviewer~A found the paper ``well-structured, thoroughly evaluated on the public WILD benchmark dataset,'' providing ``useful practical insights regarding capacity thresholds and robustness under CSI noise / AP dropouts,'' and requested minor revisions for English/formatting and a clarification of the distillation methodology. We are grateful for this assessment and have addressed both requests.
+
+\subsection{Comment 1 --- English and Formatting}
+\concern{A few minor revisions for English and format are needed.}
+
+\response{We performed a language-and-formatting pass over the whole manuscript, tightening wording for concision and readability without changing any number, claim, or citation.} Representative changes:
+\begin{itemize}[leftmargin=1.4em,itemsep=1pt,topsep=2pt]
+  \item Condensed the abstract, related work, method, results and conclusion; removed colloquial phrasings (e.g.\ ``somewhat to be expected'' $\rightarrow$ ``expected''; ``does not benefit \dots\ in relation to its robustness'' $\rightarrow$ ``gains no extra noise robustness'').
+  \item Restored the camera-ready author block: the four authors are shown with their shared E-JUST affiliation and grouped institutional e-mail addresses; a previously over-wide author line was corrected.
+  \item Used a compact layout (the two schematic figures placed side by side, and tightened tables and reference list) so that the restored author block, both figures, all five tables, and the reviewer-requested additions fit within the four-page limit.
+  \item Verified that every citation resolves (no \texttt{[?]} markers) and that no table or figure overflows its column.
+\end{itemize}
+\textbf{Primary location:} Abstract; Sections~I--VI; author block; reference list. \hfill \status{Complete.}
+
+\subsection{Comment 2 --- Clarify Distillation Methodology and Loss Equations}
+\concern{The distillation methodology and the loss equations should be clarified.}
+
+\response{We agree and have substantially expanded Section~III-D (Knowledge-Distillation Framework).} The revised text now makes the method and loss explicit:
+\begin{itemize}[leftmargin=1.4em,itemsep=1pt,topsep=2pt]
+  \item \textbf{Nature of the target.} Unlike classification distillation, which softens class logits with a temperature parameter, the DLoc teacher already emits a spatial \emph{soft target}: a single-channel heatmap $y_T$ whose probability mass is spread around the estimated location rather than concentrated on one pixel. This distribution encodes the teacher's spatial uncertainty and its implicit weighting of the four access points---information absent from the one-hot ground-truth label $y$.
+  \item \textbf{Two training modes.} Each student is trained (a)~\emph{standalone}, supervised only by the ground truth, minimizing $\mathrm{MSE}(\hat{y},y)$; and (b)~\emph{distilled}, minimizing the weighted loss
+  \[ \mathcal{L} \;=\; \alpha\,\mathrm{MSE}(\hat{y},y) \;+\; \beta\,\mathrm{MSE}(\hat{y},y_T). \]
+  \item \textbf{Meaning of each term.} Both terms are \emph{pixel-wise} mean-squared errors over the output heatmap. The coefficients $\alpha{=}0.7$ and $\beta{=}0.3$ (set empirically) keep the ground-truth term dominant while using the teacher as a regularizer; setting $\beta{=}0$ recovers the standalone objective.
+  \item \textbf{Cost.} Because the teacher is fixed, its heatmaps $y_T$ are pre-computed once offline and cached, so the 16.5\,M-parameter teacher never runs during student training and distillation adds negligible cost.
+\end{itemize}
+\textbf{Primary location:} Section~III-D; Eq.~(1). \hfill \status{Complete.}
+
+% ---------- Reviewer B ----------
+\section{Reviewer B}
+
+\subsection{Comment 1 --- Include TinyCNN and Mamba in Table~II}
+\concern{TinyCNN and Mamba results are discussed in the prose of Section~V-A but excluded from Table~II. Including them as a separate sub-block or footnote in Table~II would improve clarity and complete the comparative picture.}
+
+\response{We agree and have added both models to Table~II exactly as suggested, as a separate labelled sub-block below the high-performing models.} The new sub-block, headed \emph{``Under-capacity / architecture-mismatch (non-competitive)''}, reports:
+\begin{center}
+\small
+\begin{tabular}{@{}l r l c c c@{}}
+\toprule
+\textbf{Model} & \textbf{Params} & \textbf{Mode} & \textbf{Med.\ (m)} & \textbf{P90 (m)} & \textbf{P99 (m)} \\
+\midrule
+Mamba   & 0.65M & Standalone & 10.56 & 20.0   & 28.3 \\
+TinyCNN & 47K   & Standalone & 3.922 & 13.919 & 23.244 \\
+TinyCNN & 47K   & Distilled  & 3.706 & 14.784 & 25.101 \\
+\bottomrule
+\end{tabular}
+\end{center}
+The caption and the surrounding prose (Sections~III-C and~V-A) were updated to point to this sub-block instead of stating that the two models appear ``only in the text.'' This completes the comparative picture---showing the $\sim$2\,M-parameter capacity floor (TinyCNN) and the architectural mismatch (Mamba, a 1-D model on a 2-D task)---while keeping the high-performing models as the primary comparison.
+
+\textbf{Primary location:} Table~II; Sections~III-C and~V-A. \hfill \status{Complete.}
+
+\subsection{Comment 2 --- Fold-Specific Teacher and the Conservative LOSO Baseline}
+\concern{Explain briefly whether distilling from a fold-specific DLoc teacher would be expected to further improve LOSO performance, reinforcing why the standalone U-Net still represents a conservative baseline.}
+
+\response{We agree that this clarifies the fairness of the comparison and have added an explanatory passage to Section~V-C.} The added text makes three points:
+\begin{enumerate}[leftmargin=1.6em,itemsep=1pt,topsep=2pt]
+  \item \textbf{Why standalone is used.} The LOSO students are trained standalone because the single (July-trained) teacher provides no in-domain distillation targets for a held-out August session; a distillation term would carry no information about that unseen session.
+  \item \textbf{Expected effect of a fold-specific teacher.} A \emph{fold-specific} teacher---a DLoc model retrained on each fold's training split---would supply in-domain soft targets. Because distillation already improves the zero-shot U-Net precisely on the shifted (reflector) session (Table~V), such a teacher would be expected to \emph{further} lower the LOSO error rather than raise it.
+  \item \textbf{Conservative baseline.} The standalone LOSO numbers we report are therefore a \emph{conservative lower bound} on the distilled model's cross-session accuracy: our student already matches DLoc without the distillation benefit. We deliberately avoid a per-fold 16.5\,M-parameter teacher because retraining it would defeat the compression objective of the study.
+\end{enumerate}
+\textbf{Primary location:} Section~V-C (Cross-Session Generalization). \hfill \status{Complete.}
+
+% ---------- Overall effect ----------
+\section{Overall Effect of the Revision}
+\begin{itemize}[leftmargin=1.4em,itemsep=1pt,topsep=2pt]
+  \item From a compact loss statement to an explicit description of the spatial-soft-target distillation method, its two training modes, and the role of each loss term.
+  \item From a partial in-distribution table to a complete capacity picture, with the under-capacity TinyCNN and the architecture-mismatched Mamba shown alongside the competitive models.
+  \item From an unstated protocol choice to an explicit justification that the standalone leave-one-session-out result is a conservative baseline, with the expected direction of a fold-specific teacher stated.
+  \item From team-voice prose to a tighter, more formal register, with the camera-ready author block restored and the paper held to four pages.
+\end{itemize}
+No experimental number, table value, or conclusion was changed; the revision is clarifying and editorial.
+
+\section{Recommended Overall Response to the Reviewers}
+We thank both reviewers for their careful and constructive assessment. In response, we have clarified the knowledge-distillation methodology and its loss function, completed Table~II with the TinyCNN and Mamba results as a labelled sub-block, added an explanation of why a fold-specific teacher would be expected to improve the leave-one-session-out result (establishing our standalone student as a conservative baseline), and carried out a language-and-formatting pass. The revised camera-ready manuscript preserves all reported results, both schematic figures, and all tables within the four-page limit.
+
+\end{document}

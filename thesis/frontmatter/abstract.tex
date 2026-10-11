@@ -1,0 +1,34 @@
+%% ====================================================================
+%%  abstract.tex
+%% ====================================================================
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+
+Deep learning models like DLoc achieve sub-meter accuracy in indoor WiFi localization by learning a
+mapping from Channel State Information (CSI) to spatial probability heatmaps over a floorplan. However,
+the large size of DLoc---16.5~million parameters---prevents its use on edge devices such as IoT gateways,
+smartphones, or the access points themselves. In this thesis, we investigate whether DLoc's accuracy can
+be achieved with a much lighter model. We compress DLoc by training a family of lightweight models:
+MobileNetV2, a minimal TinyCNN, a MobileNetV2 encoder with U-Net skip connections, and a state-space
+(Mamba) model. Each model is trained both as a standalone deep learning model and as a ``student'' model
+distilled from the DLoc teacher. Each model is evaluated along five dimensions: accuracy, robustness to
+signal degradation (access-point dropout, Gaussian noise, signal attenuation, and spatial blur),
+cross-session generalization, statistical reproducibility, and computational efficiency. The best model,
+a MobileNetV2 encoder with U-Net skip connections, reduces the median error from 0.707\,m (DLoc) to
+0.640\,m---a 9.5\% improvement---yet requires only 2.41~million parameters ($6.8\times$ fewer) and
+$56\times$ fewer floating-point operations than the teacher. Furthermore, when evaluated under the same
+leave-one-session-out protocol as the original DLoc paper, the MobileNetV2-UNet model reaches the same
+accuracy as DLoc on one fold of the cross-session validation and remains within 0.14\,m of the DLoc
+accuracy on the other folds. Knowledge distillation was mainly beneficial to robustness against Gaussian
+noise (improving robustness by a factor of 3.4), but only benefited models with sufficient capacity
+relative to the data; smaller models that were distilled actually suffered in robustness with the use of
+knowledge distillation. Together, these results indicate that it is possible to achieve accurate
+localization using lightweight models, and that both architectural and training-based design elements help
+to resolve accuracy and robustness issues.
+
+\vspace{0.8em}
+\noindent\textbf{Keywords:} WiFi indoor localization, channel state information, knowledge distillation,
+model compression, MobileNetV2, U-Net skip connections, robustness, cross-session generalization, edge
+deployment.
+
+\clearpage

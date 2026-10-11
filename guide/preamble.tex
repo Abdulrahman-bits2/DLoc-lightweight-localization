@@ -1,0 +1,93 @@
+%% ====================================================================
+%%  preamble.tex — packages, paths, and custom commands for the
+%%  DLoc Thesis Concept Guide. Style mirrors thesis/preamble.tex so the
+%%  two documents look like a matched set.
+%% ====================================================================
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[english]{babel}
+
+\usepackage{geometry}
+\geometry{a4paper, margin=2.5cm}
+
+\usepackage{graphicx}
+%% Look in our own figures/ first, then fall back to the thesis/repo figures
+%% so the guide compiles in-repo even before figures are copied locally.
+\graphicspath{{figures/}{../thesis/figures/}{../Figures/generated/}{../Figures/}}
+
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage[chapter]{placeins}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{colortbl}
+\usepackage{setspace}
+\onehalfspacing
+\raggedbottom
+
+%% --- compact chapter titles (match the thesis look) ---
+\usepackage{titlesec}
+\titleformat{\chapter}[block]
+  {\normalfont\bfseries\Huge}{\thechapter\quad}{0pt}{\Huge}
+\titlespacing*{\chapter}{0pt}{6pt}{14pt}
+
+\usepackage{tikz}
+\usetikzlibrary{positioning, arrows.meta, calc, fit, backgrounds,
+  shapes.geometric, shapes.misc, decorations.pathreplacing}
+
+%% --- pedagogical callout boxes (Overleaf / TeX Live full ship tcolorbox) ---
+\usepackage[most]{tcolorbox}
+
+\usepackage[hidelinks]{hyperref}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=black,
+  citecolor=black,
+  urlcolor=blue,
+}
+
+%% --- colours + helpers reused from the thesis/results report ---
+\definecolor{bestcolor}{RGB}{0,128,0}
+\definecolor{worstcolor}{RGB}{180,0,0}
+\definecolor{lightgray}{gray}{0.92}
+\definecolor{accent}{RGB}{38,70,83}
+\definecolor{accent2}{RGB}{42,157,143}
+\definecolor{accent3}{RGB}{231,111,81}
+\newcommand{\best}[1]{\textcolor{bestcolor}{\textbf{#1}}}
+\newcommand{\worst}[1]{\textcolor{worstcolor}{#1}}
+
+%% --- shorthand for the recurring quantities ---
+\newcommand{\m}{\,\text{m}}                     % metres
+\newcommand{\code}[1]{\texttt{#1}}
+
+%% --- title-page name (matches the thesis); defined before use on the title page ---
+\newcommand{\supervisorname}{Prof.\ Ehab Elshazly}
+
+%% --- three callout environments used throughout the guide ---
+\newtcolorbox{keyidea}{
+  enhanced, breakable, colback=accent2!7, colframe=accent2!75!black,
+  boxrule=0.7pt, arc=2pt, left=6pt, right=6pt, top=4pt, bottom=4pt,
+  fonttitle=\bfseries, title=Key idea}
+
+\newtcolorbox{whybox}{
+  enhanced, breakable, colback=accent!6, colframe=accent!80!black,
+  boxrule=0.7pt, arc=2pt, left=6pt, right=6pt, top=4pt, bottom=4pt,
+  fonttitle=\bfseries, title=Why it behaved this way}
+
+\newtcolorbox{defensetip}{
+  enhanced, breakable, colback=accent3!8, colframe=accent3!80!black,
+  boxrule=0.7pt, arc=2pt, left=6pt, right=6pt, top=4pt, bottom=4pt,
+  fonttitle=\bfseries, title=Defense tip}
+
+%% --- a compact key/value "at a glance" box for the model deep-dives ---
+\newtcolorbox{ataglance}[1]{
+  enhanced, breakable, colback=lightgray, colframe=black!55,
+  boxrule=0.6pt, arc=1pt, left=6pt, right=6pt, top=3pt, bottom=3pt,
+  fonttitle=\bfseries, title=At a glance: #1}

@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lightweight WiFi Localization — Defense</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="deck">
+  <div id="stage">
+
+  <!-- 1. TITLE -->
+  <section class="slide title-slide active">
+    <div class="eyebrow">Graduation Defense · E-JUST</div>
+    <h1>Lightweight Knowledge-Distilled<br>Deep Learning for WiFi Indoor Localization</h1>
+    <div class="sub">Compressing DLoc <b>6.8&times;</b> while matching its sub-meter accuracy</div>
+    <div class="rule"></div>
+    <div class="who">
+      <div class="names">Abdulrahman M. Ebrahim &nbsp;·&nbsp; Ahmed E. Haggag &nbsp;·&nbsp; Fadwa Y. Mahmoud</div>
+      <div>Supervisor: Prof. Ehab Elshazly</div>
+      <div>School of Electronics, Communications &amp; Computer Engineering</div>
+    </div>
+    <aside class="notes">Good morning. We are presenting our graduation project: compressing the DLoc WiFi-localization network into a model small enough for edge devices, without losing accuracy. Over the next 20 minutes we'll cover the problem, our method and data, then the results and what they mean. (~20 s)</aside>
+    <footer class="slide-foot"><span class="brand">E-JUST · Lightweight WiFi Localization</span><span>Title</span></footer>
+  </section>
+
+  <!-- OVERVIEW: motivation + problem + solution (general, no numbers) -->
+  <section class="slide">
+    <span class="kicker">Overview</span>
+    <h2>Accurate indoor localization — made light enough to deploy</h2>
+    <div class="body">
+      <div style="display:flex;gap:22px;margin-top:4px">
+        <div class="card" style="flex:1">
+          <h3>Why it matters</h3>
+          <p style="font-size:19px;line-height:1.55">Knowing where people and things are <strong>indoors</strong> powers hospitals, warehouses, robots, and AR — everywhere GPS fails. WiFi is already all around us, and it can do the job.</p>
+        </div>
+        <div class="card" style="flex:1">
+          <h3>The problem</h3>
+          <p style="font-size:19px;line-height:1.55">The most accurate WiFi localizers are <span class="warn">large and computationally heavy</span> — too heavy to run on the small everyday devices where localization is actually needed.</p>
+        </div>
+        <div class="card" style="flex:1">
+          <h3>Our approach</h3>
+          <p style="font-size:19px;line-height:1.55">Build much <strong>smaller models</strong> and train them to <strong>imitate the large, accurate one</strong> — keeping the accuracy while shedding the weight.</p>
+        </div>
+      </div>
+      <div class="callout why" style="margin-top:20px"><b>The goal</b>Keep accurate indoor localization, but make it light enough to run where it is needed — without giving up accuracy, reliability, or the ability to work in new environments.</div>
+    </div>
+    <aside class="notes">Indoor localization matters wherever GPS fails — hospitals, warehouses, robots, augmented reality — and WiFi can do it well because the infrastructure is already everywhere. The catch: the most accurate systems are large and heavy, too heavy to run on the small everyday devices where we actually want localization. Our approach is to build much smaller models and train them to imitate the large, accurate one — keeping the accuracy while shedding the weight. The goal is accurate localization that is light enough to deploy, without losing reliability or the ability to work in new spaces. (~45 s)</aside>
+    <footer class="slide-foot"><span class="brand">E-JUST · Lightweight WiFi Localization</span><span>Overview</span></footer>
+  </section>
+
+  <!-- 2. AGENDA -->
+  <section class="slide">
+    <span class="kicker">Agenda</span>
+    <h2>What we'll cover</h2>
+    <div class="body">
+      <ul class="bullets" style="font-size:24px;gap:.7em">
+        <li><strong>Part 1 — The problem &amp; DLoc.</strong> Indoor localization, the WiFi signal, the network we compress, and our method.</li>
+        <li><strong>Part 2 — Our models.</strong> Four lightweight student architectures, from a sequence model to our U-Net.</li>
+        <li><strong>Part 3 — Data, experiments &amp; results.</strong> The WILD dataset, the setup, and what the models actually achieved.</li>
+        <li class="note-row">A few extra details are in backup slides for your questions.</li>
+      </ul>
+    </div>
+    <aside class="notes">Three parts, then questions. Part one: the problem and the DLoc network we compress. Part two: the four student architectures we built. Part three: the data, how we ran the experiments, and the results. A few extra details sit in backup slides. (~25 s)</aside>
+    <footer class="slide-foot"><span class="brand">E-JUST · Lightweight WiFi Localization</span><span>Agenda</span></footer>
+  </section>
+
+  <!-- 3. DIVIDER 1 -->
+  <section class="slide divider">
+    <span class="kicker">Part 1</span>
+    <h2>The Problem &amp; DLoc</h2>
+    <div class="body">Why indoor localization is hard — and how DLoc solves it at a cost.</div>
+    <aside class="notes">Presenter handoff point. Part 1: the problem and the DLoc baseline.</aside>
+    <footer class="slide-foot"><span class="brand">E-JUST · Lightweight WiFi Localization</span><span>Part 1</span></footer>
+  </section>
+
+  <!-- 4. INTRO: PROBLEM -->
+  <section class="slide">
+    <span class="kicker">Introduction</span>
+    <h2>Where GPS can't go</h2>
+    <div class="body cols w7">
+      <div>
+        <ul class="bullets">
+          <li>Indoor location powers <strong>asset tracking, hospitals, AR, robots, and location-aware services</strong>.</li>
+          <li>Outdoors, GPS is accurate to a few meters. <strong>Indoors it fails</strong>: walls and ceilings <span class="warn">reflect and attenuate</span> the satellite signals.</li>
+          <li>So we need an indoor alternative — and <strong>WiFi is already everywhere</strong>.</li>
+        </ul>
+      </div>
+      <div class="card" style="align-self:center">
+        <h3>Why WiFi</h3>
+        <ul class="bullets" style="font-size:18px">
+          <li>Infrastructure already installed</li>
+          <li>Access points already measure the signal</li>
+          <li>No new hardware on the device</li>
+        </ul>
+      </div>
+    </div>
+    <aside class="notes">Indoor localization matters for a lot of applications, but GPS doesn't work indoors — the walls reflect and weaken the satellite signals. We need an alternative, and WiFi is attractive because the infrastructure is already there and the access points already measure the signal. (~45 s)</aside>
+    <footer class="slide-foot"><span class="brand">E-JUST · Lightweight WiFi Localization</span><span>Introduction</span></footer>
+  </section>
+
+  <!-- 5. INTRO: SIGNAL -->
+  <section class="slide">
+    <span class="kicker">Introduction</span>
+    <h2>From a WiFi signal to a location</h2>
+    <div class="body">
+      <ul class="bullets">
+        <li>Each access point measures <strong>Channel State Information (CSI)</strong> — the complex channel per subcarrier and antenna.</li>
+        <li>Amplitude hints at <span class="hl">distance</span>; phase across antennas gives the <span class="hl">angle of arrival (AoA)</span>; phase across subcarriers gives the <span class="hl">time of flight (ToF)</span>.</li>
+        <li>But indoors the signal bounces: <span class="warn">multipath &amp; non-line-of-sight (NLOS)</span> break classical geometry.</li>
+        <li>And unsynced clocks add an unknown <span class="warn">ToF offset</span> that shifts each AP's estimate by 10–15&nbsp;m.</li>
+      </ul>
+      <div class="callout why" style="margin-top:14px"><b>The core challenge</b>Four APs each give a shifted, multipath-corrupted estimate that <em>disagree</em>. A model has to reconcile them — that's what learning buys us over geometry.</div>
+    </div>
+    <aside class="notes">How do you get location from a WiFi signal? The CSI encodes distance through amplitude, angle through phase across antennas, and travel time through phase across frequencies. The hard part: indoor multipath and non-line-of-sight, plus an unknown clock offset that moves each AP's estimate by up to 15 meters. So the four APs disagree, and a learned model reconciles them where classical geometry fails. (~55 s)</aside>
+    <footer class="slide-foot"><span class="brand">E-JUST · Lightweight WiFi Localization</span><span>Introduction</span></footer>
+  </section>
+
+  <!-- 6. DLoc IDEA + PIPELINE -->
+  <section class="slide">
+    <span class="kicker">DLoc</span>
+    <h2>DLoc: localization as image translation</h2>
+    <div class="body">
+      <p class="lead">Turn each AP's CSI into a 2-D <strong>heatmap</strong> over the floor, then learn to translate the 4-channel image into one clean location heatmap. The brightest pixel is the answer.</p>
+      <div class="flow" style="margin-top:18px">
+        <div class="node">Raw CSI<small>4 APs</small></div><span class="arr">&rarr;</span>
+        <div class="node">AoA–ToF<br>profiles<small>per AP</small></div><span class="arr">&rarr;</span>
+        <div class="node">4-channel<br>image<small>[4&times;161&times;361]</small></div><span class="arr">&rarr;</span>
+        <div class="node teal">Neural<br>network<small>translate</small></div><span class="arr">&rarr;</span>
+        <div class="node">Location<br>heatmap<small>[1&times;161&times;361]</small></div><span class="arr">&rarr;</span>
+        <div class="node orange">arg max<small>&rarr; (x, y)</small></div>
+      </div>
+      <p class="note-row">Grid resolution 0.1&nbsp;m/pixel · target is a Gaussian bump at the true location.</p>
+    </div>
+    <aside class="notes">DLoc's key idea is to treat this as image-to-image translation. Each AP's signal becomes a heatmap over the floor; stack four of them into an image; the network outputs one clean heatmap; the peak is the predicted location at 0.1-meter resolution. This framing is central — four of our five models accept it, and the one that doesn't, fails. (~45 s)</aside>
+    <footer class="slide-foot"><span class="brand">E-JUST · Lightweight WiFi Localization</span><span>DLoc</span></footer>
+  </section>
+
+  <!-- 7. DLoc ARCHITECTURE -->
+  <section class="slide">
+    <span class="kicker">DLoc</span>
+    <h2>One encoder, two decoders</h2>
+    <div class="body cols">
+      <div style="align-self:center">
+        <svg viewBox="0 0 670 326" style="width:100%;height:auto">
+          <defs><marker id="ahd" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#264653"/></marker></defs>
+          <g font-family="Segoe UI,Arial" font-size="11.5" text-anchor="middle">
+          <!-- input -->
+          <rect x="6" y="140" width="94" height="44" rx="6" fill="#f4f7f8" stroke="#264653"/>
+          <text x="53" y="158">Input</text><text x="53" y="174" font-size="9.5">4&times;161&times;361</text>
+          <!-- shared ResNet encoder (descending) -->
+          <text x="182" y="78" fill="#21867a" font-weight="bold" font-size="11.5">Shared ResNet encoder</text>
+          <rect x="122" y="92"  width="120" height="32" rx="6" fill="#dff1ee" stroke="#21867a"/><text x="182" y="112">Res block &times;2 &middot; 64</text>
+          <rect x="122" y="132" width="120" height="32" rx="6" fill="#cfeae4" stroke="#21867a"/><text x="182" y="152">&darr; Res &middot; 128</text>
+          <rect x="122" y="172" width="120" height="32" rx="6" fill="#bfe3db" stroke="#21867a"/><text x="182" y="192">&darr; Res &middot; 256</text>
+          <rect x="122" y="212" width="120" height="30" rx="6" fill="#264653" stroke="#264653"/><text x="182" y="231" fill="#fff">&darr; Res &middot; 512</text>
+          <!-- shared features -->
+          <rect x="270" y="211" width="78" height="32" rx="6" fill="#264653" stroke="#264653"/><text x="309" y="231" fill="#fff" font-size="10.5">features</text>
+          <!-- location decoder branch (top) -->
+          <rect x="392" y="92"  width="132" height="32" rx="6" fill="#cfe0e4" stroke="#264653"/><text x="458" y="112">Location decoder</text>
+          <rect x="548" y="88"  width="116" height="40" rx="6" fill="#f6e2d6" stroke="#e76f51"/><text x="606" y="105">Heatmap</text><text x="606" y="120" font-size="9">1&times;161&times;361</text>
+          <text x="458" y="142" font-size="9.5" fill="#777">read at inference</text>
+          <!-- consistency decoder branch (bottom) -->
+          <rect x="392" y="211" width="132" height="32" rx="6" fill="#f6e2d6" stroke="#e76f51"/><text x="458" y="231" font-size="10.5">Consistency decoder</text>
+          <rect x="548" y="207" width="116" height="40" rx="6" fill="#fbeee6" stroke="#e76f51"/><text x="606" y="224">4 AP maps</text><text x="606" y="239" font-size="9">4&times;161&times;361</text>
+          <text x="458" y="261" font-size="9.5" fill="#777">training only</text>
+          <!-- arrows -->
+          <g fill="none" stroke="#264653" stroke-width="1.5" marker-end="url(#ahd)">
+            <path d="M100,160 L120,112"/>
+            <path d="M182,124 L182,132"/><path d="M182,164 L182,172"/><path d="M182,204 L182,212"/>
+            <path d="M242,227 L268,227"/>
+            <path d="M348,222 C372,160 372,118 390,112"/>
+            <path d="M348,229 L390,229"/>
+            <path d="M524,108 L546,108"/><path d="M524,227 L546,227"/>
+          </g>
+          </g>
+        </svg>
+      </div>
+      <div>
+        <ul class="bullets">
+          <li>The <strong>location decoder</strong> produces the heatmap we read at inference.</li>
+          <li>The <strong>consistency (offset) decoder</strong> forces the four APs to <em>agree</em> — its job at training time.</li>
+        </ul>
+        <div class="callout"><b>What the consistency decoder learns</b>removes the clock offset · resolves multipath (picks the direct path) · sharpens low-bandwidth inputs. One AP can't fix itself; four mutually-consistent APs can.</div>
+      </div>
+    </div>
+    <aside class="notes">Architecturally DLoc is an encoder with two decoders. A shared ResNet encoder feeds a location decoder — that's the heatmap we use — and a consistency decoder, which is DLoc's clever bit: it forces the four AP maps to agree, and in doing so it learns to remove the clock offset and resolve multipath. Remember the consistency decoder — it comes back when we discuss the reflector session. (~50 s)</aside>
+    <footer class="slide-foot"><span class="brand">E-JUST · Lightweight WiFi Localization</span><span>DLoc</span></footer>
+  </section>
+
+  <!-- 8. DLoc RESULTS + PROBLEM -->
+  <section class="slide">
+    <span class="kicker">DLoc</span>
+    <h2>Accurate — but too heavy for the edge</h2>
+    <div class="body">
+      <div class="stats" style="margin:6px 0 18px">
+        <div class="stat"><div class="num navy">16.5M</div><div class="lab">parameters</div></div>
+        <div class="stat"><div class="num navy">81&nbsp;G</div><div class="lab">FLOPs / inference</div></div>
+        <div class="stat"><div class="num warn">271&nbsp;ms</div><div class="lab">CPU latency</div></div>
+        <div class="stat"><div class="num">0.71&nbsp;m</div><div class="lab">median error</div></div>
+      </div>
+    </div>
+    <aside class="notes">DLoc is accurate — sub-meter — but it's 16.5 million parameters and a quarter-second per prediction on a CPU. That's a non-starter for the edge devices where indoor localization is actually useful. So our central question: is that cost inherent to the problem, or is DLoc simply over-parameterized? The rest of the talk answers that. This is the motivation. (~45 s)</aside>
+    <footer class="slide-foot"><span class="brand">E-JUST · Lightweight WiFi Localization</span><span>DLoc</span></footer>
+  </section>
+
+  <!-- 9. METHOD: DISTILLATION -->
+  <section class="slide">
+    <span class="kicker">Our method</span>
+    <h2>Two levers: architecture &amp; distillation</h2>
+    <div class="body cols">
+      <div>
+        <ul class="bullets">
+          <li>We train each small <strong>student</strong> in two modes: <span class="hl">standalone</span> (ground truth only) and <span class="hl">distilled</span> (also match the DLoc teacher).</li>
+          <li>Distilled loss:
+            <div class="callout" style="font-size:18px;margin:.4em 0">L = <b style="display:inline">0.7</b>·MSE(&#375;, y) + <b style="display:inline">0.3</b>·MSE(&#375;, y<sub>T</sub>)</div>
+          </li>
+          <li>The teacher is frozen and <strong>precomputed</strong> — never run during student training.</li>
+        </ul>
+      </div>
+      <div>
+        <div class="flow" style="flex-direction:column;gap:6px;margin-bottom:12px">
+          <div class="node">DLoc teacher (frozen)</div><span class="arr">&darr;</span>
+          <div class="node">cached y<sub>T</sub></div><span class="arr">&darr;</span>
+          <div class="node teal">Student &nbsp;&rarr;&nbsp; 0.7·y + 0.3·y<sub>T</sub></div>
+        </div>
+      </div>
+    </div>
+    <aside class="notes">Our two levers are architecture and knowledge distillation. Distillation trains a small student to match the big teacher's output as well as the ground truth, with a 0.7/0.3 weighting. We precompute the teacher once so it never runs in the training loop. The insight: unlike a classifier, our teacher's heatmap is already soft — probability spread around the location — so distillation acts as spatial label smoothing. As you'll see, that buys robustness, not clean accuracy. (~55 s)</aside>
+    <footer class="slide-foot"><span class="brand">E-JUST · Lightweight WiFi Localization</span><span>Our method</span></footer>
+  </section>
+
+  <!-- PART 2 DIVIDER: OUR MODELS -->
+  <section class="slide divider">
+    <span class="kicker">Part 2</span>
+    <h2>Our Models</h2>
+    <div class="body">Four lightweight students — from a sequence model to a U-Net — each a different bet on architecture.</div>
+    <aside class="notes">Presenter handoff. Part 2: the four student architectures we built, from the simplest to our best.</aside>
+    <footer class="slide-foot"><span class="brand">E-JUST · Lightweight WiFi Localization</span><span>Part 2</span></footer>
+  </section>
+
+  <!-- MODEL 1: MAMBA (architecture) -->
+  <section class="slide">
+    <span class="kicker">Model 1 / 4</span>
+    <h2>Mamba — a sequence model for the signal</h2>
+    <div class="body">
+      <svg viewBox="0 0 660 150" style="width:100%;height:auto">
+        <defs><marker id="am1" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#264653"/></marker></defs>
+        <g font-family="Segoe UI,Arial" font-size="12" text-anchor="middle">
+        <rect x="6"   y="50" width="104" height="52" rx="6" fill="#f4f7f8" stroke="#264653"/><text x="58" y="78">4-AP input</text><text x="58" y="95" font-size="9.5">flattened</text>
+        <rect x="140" y="50" width="104" height="52" rx="6" fill="#dff1ee" stroke="#21867a"/><text x="192" y="78">1-D sequence</text><text x="192" y="95" font-size="9.5">+ embedding</text>
+        <rect x="274" y="42" width="150" height="68" rx="6" fill="#264653" stroke="#264653"/><text x="349" y="76" fill="#fff">Mamba blocks &times;N</text><text x="349" y="94" fill="#fff" font-size="9.5">selective state-space</text>
+        <rect x="454" y="50" width="96"  height="52" rx="6" fill="#cfe0e4" stroke="#264653"/><text x="502" y="80">Linear head</text>
+        <rect x="566" y="50" width="88"  height="52" rx="6" fill="#f6e2d6" stroke="#e76f51"/><text x="610" y="80">(x, y)</text>
+        <g fill="none" stroke="#264653" stroke-width="1.6" marker-end="url(#am1)">
+          <path d="M110,76 L138,76"/><path d="M244,76 L272,76"/><path d="M424,76 L452,76"/><path d="M550,76 L564,76"/>
+        </g>
+        </g>
+      </svg>
+      <div class="cols" style="margin-top:14px">
+        <div class="card"><h3>The design</h3><p style="font-size:18px;line-height:1.5">A <strong>selective state-space model</strong>. It reads the channel data as a <strong>1-D sequence</strong> and scans along it — there is <span class="warn">no 2-D spatial grid</span>.</p></div>
+        <div class="card"><h3>Why we tried it</h3><p style="font-size:18px;line-height:1.5">Sequence models are very efficient. The question: can a model that never "sees" the floor as an image still localise? It is our <strong>smallest</strong> student.</p></div>
+      </div>
+    </div>
+    <aside class="notes">Our first student is Mamba — a selective state-space model. Unlike everything else, it treats the channel data as a one-dimensional sequence and scans along it, with no two-dimensional spatial grid. It's the smallest and most efficient option, and we use it to ask whether a model that never sees the floor as an image can still localise. (~35 s)</aside>
+    <footer class="slide-foot"><span class="brand">E-JUST · Lightweight WiFi Localization</span><span>Models</span></footer>
+  </section>
+
+  <!-- MODEL 2: TINYCNN (architecture) -->
+  <section class="slide">
+    <span class="kicker">Model 2 / 4</span>
+    <h2>TinyCNN — the minimal baseline</h2>
+    <div class="body">
+      <svg viewBox="0 0 700 150" style="width:100%;height:auto">
+        <defs><marker id="atc" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#264653"/></marker></defs>
+        <g font-family="Segoe UI,Arial" font-size="12" text-anchor="middle">
+        <rect x="6"   y="50" width="90"  height="52" rx="6" fill="#f4f7f8" stroke="#264653"/><text x="51" y="80">Input 4ch</text>
+        <rect x="104" y="50" width="86"  height="52" rx="6" fill="#dff1ee" stroke="#21867a"/><text x="147" y="80">Conv &darr;</text>
+        <rect x="198" y="50" width="86"  height="52" rx="6" fill="#dff1ee" stroke="#21867a"/><text x="241" y="80">Conv &darr;</text>
+        <rect x="292" y="50" width="86"  height="52" rx="6" fill="#dff1ee" stroke="#21867a"/><text x="335" y="80">Conv &darr;</text>
+        <rect x="386" y="50" width="86"  height="52" rx="6" fill="#264653" stroke="#264653"/><text x="429" y="80" fill="#fff">FC</text>
+        <rect x="480" y="50" width="86"  height="52" rx="6" fill="#264653" stroke="#264653"/><text x="523" y="80" fill="#fff">FC</text>
+        <rect x="574" y="50" width="120" height="52" rx="6" fill="#f6e2d6" stroke="#e76f51"/><text x="634" y="80">Heatmap</text>
+        <text x="382" y="38" font-size="9.5" fill="#777" text-anchor="middle">flatten</text>
+        <g fill="none" stroke="#264653" stroke-width="1.6" marker-end="url(#atc)">
+          <path d="M96,76 L102,76"/><path d="M190,76 L196,76"/><path d="M284,76 L290,76"/><path d="M378,76 L384,76"/><path d="M472,76 L478,76"/><path d="M566,76 L572,76"/>
+        </g>
+        </g>
+      </svg>
+      <div class="cols" style="margin-top:14px">
+        <div class="card"><h3>The design</h3><p style="font-size:18px;line-height:1.5">Just <strong>three convolutional layers and two fully-connected layers</strong> — the simplest network that maps the 4-channel input to a location.</p></div>
+        <div class="card"><h3>Why we tried it</h3><p style="font-size:18px;line-height:1.5">A deliberate <strong>floor probe</strong>: how small can the network get before it stops working? It has by far the <span class="warn">lowest capacity</span>.</p></div>
+      </div>
+    </div>
+    <aside class="notes">Second student, TinyCNN — just three convolutional layers and two fully-connected layers, the simplest thing that maps the input to a location. It's a deliberate floor probe: we use it to ask how small the network can get before accuracy falls apart. It's by far the lowest-capacity model. (~35 s)</aside>
+    <footer class="slide-foot"><span class="brand">E-JUST · Lightweight WiFi Localization</span><span>Models</span></footer>
+  </section>
+
+  <!-- MODEL 3: MOBILENETV2 (architecture) -->
+  <section class="slide">
+    <span class="kicker">Model 3 / 4</span>
+    <h2>MobileNetV2 — an efficient encoder–decoder</h2>
+    <div class="body cols w3">
+      <div style="align-self:center">
+        <svg viewBox="0 0 640 300" style="width:100%;height:auto">
+          <defs><marker id="amn" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#264653"/></marker></defs>
+          <g font-family="Segoe UI,Arial" font-size="12" text-anchor="middle">
+          <rect x="20" y="20" width="86" height="34" rx="6" fill="#f4f7f8" stroke="#264653"/><text x="63" y="41">Input 4ch</text>
+          <rect x="55" y="78" width="86" height="34" rx="6" fill="#dff1ee" stroke="#21867a"/><text x="98" y="99">enc 24</text>
+          <rect x="90" y="136" width="86" height="34" rx="6" fill="#dff1ee" stroke="#21867a"/><text x="133" y="157">enc 32</text>
+          <rect x="125" y="194" width="86" height="34" rx="6" fill="#dff1ee" stroke="#21867a"/><text x="168" y="215">enc 96</text>
+          <rect x="250" y="250" width="140" height="36" rx="6" fill="#264653" stroke="#264653"/><text x="320" y="272" fill="#fff">bottleneck 320</text>
+          <rect x="430" y="194" width="92" height="34" rx="6" fill="#cfe0e4" stroke="#264653"/><text x="476" y="215">dec 128</text>
+          <rect x="465" y="136" width="92" height="34" rx="6" fill="#cfe0e4" stroke="#264653"/><text x="511" y="157">dec 64</text>
+          <rect x="500" y="78" width="92" height="34" rx="6" fill="#cfe0e4" stroke="#264653"/><text x="546" y="99">dec 32</text>
+          <rect x="534" y="20" width="92" height="34" rx="6" fill="#f6e2d6" stroke="#e76f51"/><text x="580" y="41">head &rarr; 1</text>
+          <g fill="none" stroke="#264653" stroke-width="1.6" marker-end="url(#amn)">
+            <path d="M63,54 L98,78"/><path d="M98,112 L133,136"/><path d="M133,170 L168,194"/>
+            <path d="M168,228 L300,255"/><path d="M360,250 L476,228"/><path d="M476,194 L511,170"/>
+            <path d="M511,136 L546,112"/><path d="M546,78 L580,54"/>
+          </g>
+          <text x="320" y="120" fill="#b04632" font-size="12" text-anchor="middle" font-weight="bold">no skips</text>
+          </g>
+        </svg>
+      </div>
+      <div>
+        <div class="card"><h3>The design</h3><p style="font-size:18px;line-height:1.5"><strong>Depthwise-separable convolutions</strong> and <strong>inverted residual blocks</strong> form a compact encoder; a decoder expands the bottleneck back into a heatmap.</p></div>
+        <div class="card" style="margin-top:12px"><h3>The catch</h3><p style="font-size:18px;line-height:1.5"><span class="warn">No skip connections</span> — every bit of spatial detail must squeeze through the narrow bottleneck. The next model fixes exactly this.</p></div>
+      </div>
+    </div>
+    <aside class="notes">Third student, MobileNetV2. Depthwise-separable convolutions and inverted residual blocks make a very compact encoder, which feeds a decoder that expands the bottleneck back to a heatmap. The catch — and it sets up the next slide — is that there are no skip connections, so all the spatial detail has to pass through that narrow bottleneck. (~40 s)</aside>
+    <footer class="slide-foot"><span class="brand">E-JUST · Lightweight WiFi Localization</span><span>Models</span></footer>
+  </section>
+
+  <!-- MODEL 4: MOBILENETV2-UNET (architecture, the hero) -->
+  <section class="slide">
+    <span class="kicker">Model 4 / 4 · the hero</span>
+    <h2>MobileNetV2-UNet — the same encoder, plus skips</h2>
+    <div class="body cols w3">
+      <div style="align-self:center">
+        <svg viewBox="0 0 640 300" style="width:100%;height:auto">
+          <defs><marker id="aun" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#21867a"/></marker></defs>
+          <g font-family="Segoe UI,Arial" font-size="12" text-anchor="middle">
+          <rect x="20" y="20" width="86" height="34" rx="6" fill="#f4f7f8" stroke="#264653"/><text x="63" y="41">Input 4ch</text>
+          <rect x="55" y="78" width="86" height="34" rx="6" fill="#dff1ee" stroke="#21867a"/><text x="98" y="99">enc 24</text>
+          <rect x="90" y="136" width="86" height="34" rx="6" fill="#dff1ee" stroke="#21867a"/><text x="133" y="157">enc 32</text>
+          <rect x="125" y="194" width="86" height="34" rx="6" fill="#dff1ee" stroke="#21867a"/><text x="168" y="215">enc 96</text>
+          <rect x="250" y="250" width="140" height="36" rx="6" fill="#264653" stroke="#264653"/><text x="320" y="272" fill="#fff">bottleneck 320</text>
+          <rect x="430" y="194" width="92" height="34" rx="6" fill="#cfe0e4" stroke="#264653"/><text x="476" y="215">dec 128</text>
+          <rect x="465" y="136" width="92" height="34" rx="6" fill="#cfe0e4" stroke="#264653"/><text x="511" y="157">dec 64</text>
+          <rect x="500" y="78" width="92" height="34" rx="6" fill="#cfe0e4" stroke="#264653"/><text x="546" y="99">dec 32</text>
+          <rect x="534" y="20" width="92" height="34" rx="6" fill="#f6e2d6" stroke="#e76f51"/><text x="580" y="41">head &rarr; 1</text>
+          <g fill="none" stroke="#264653" stroke-width="1.6" marker-end="url(#aun)">
+            <path d="M63,54 L98,78"/><path d="M98,112 L133,136"/><path d="M133,170 L168,194"/>
+            <path d="M168,228 L300,255"/><path d="M360,250 L476,228"/><path d="M476,194 L511,170"/>
+            <path d="M511,136 L546,112"/><path d="M546,78 L580,54"/>
+          </g>
+          <g fill="none" stroke="#2a9d8f" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#aun)">
+            <path d="M168,200 C300,150 360,150 476,200"/>
+            <path d="M133,142 C320,95 340,95 511,142"/>
+            <path d="M98,84 C330,45 350,45 546,84"/>
+          </g>
+          <text x="320" y="130" fill="#21867a" font-size="12" text-anchor="middle" font-weight="bold">U-Net skips</text>
+          </g>
+        </svg>
+      </div>
+      <div>
+        <div class="card"><h3>The design</h3><p style="font-size:18px;line-height:1.5">The same efficient encoder, plus <span class="hl">U-Net skip connections</span> (dashed) that carry high-resolution detail <strong>straight to the decoder</strong>, bypassing the bottleneck.</p></div>
+        <div class="card" style="margin-top:12px"><h3>Why it matters</h3><p style="font-size:18px;line-height:1.5">In localisation, the <strong>spatial detail is the answer</strong> — the skips preserve exactly what the bottleneck would throw away. This is our <strong>main model</strong>.</p></div>
+      </div>
+    </div>
+    <aside class="notes">Our fourth student is the hero: take that same MobileNetV2 encoder and add U-Net skip connections — the dashed paths that carry high-resolution features straight into the decoder, bypassing the bottleneck. Why it matters: in localisation the spatial detail basically is the answer, and the skips preserve exactly what the bottleneck would discard. This is the model we build the results around. (~45 s)</aside>
+    <footer class="slide-foot"><span class="brand">E-JUST · Lightweight WiFi Localization</span><span>Models</span></footer>
+  </section>
+
+  <!-- PART 3 DIVIDER: DATA, EXPERIMENTS & RESULTS -->
+  <section class="slide divider">
+    <span class="kicker">Part 3</span>
+    <h2>Data, Experiments &amp; Results</h2>
+    <div class="body">The dataset and setup behind every run — then what the models actually achieved.</div>
+    <aside class="notes">Presenter handoff. Part 3: the data, how we ran the experiments, and the results.</aside>
+    <footer class="slide-foot"><span class="brand">E-JUST · Lightweight WiFi Localization</span><span>Part 3</span></footer>
+  </section>
+
+  <!-- 11. DATASET COLLECTION -->
+  <section class="slide">
+    <span class="kicker">Dataset</span>
+    <h2>WILD: real measurements with ground truth</h2>
+    <div class="body cols w7">
+      <div>
+        <ul class="bullets">
+          <li><strong>WILD</strong> — the public dataset released with DLoc (UC San Diego).</li>
+          <li>Collected by <strong>MapFind</strong>, a TurtleBot2 robot carrying LIDAR, an RGB-D camera, and a Quantenna WiFi card, driving at 15&nbsp;cm/s.</li>
+          <li>Ground-truth position from <strong>SLAM</strong> (RTAB-Map), median error <span class="hl">≈ 5.7&nbsp;cm</span>; CSI logged every 50&nbsp;ms.</li>
+          <li>CSI + SLAM position = one labelled example; <strong>~100k points</strong> total.</li>
+        </ul>
+      </div>
+      <div class="card" style="align-self:center">
+        <h3>The space we use</h3>
+        <p style="font-size:18px;line-height:1.45">The harder <strong>4-AP Jacobs Hall</strong> (1500&nbsp;sq&nbsp;ft). <strong>AP&nbsp;4 is hidden behind a wall</strong> (strong NLOS) and a wall of plasma screens behind AP&nbsp;3 creates <strong>rich multipath</strong>.</p>
+      </div>
+    </div>
+    <aside class="notes">The data is WILD, released with DLoc. It was collected by a robot called MapFind — a TurtleBot with LIDAR, a camera, and a WiFi card — that drives the space slowly while SLAM gives it ground-truth position to about 5.7 centimeters. So every example is real CSI paired with an accurate label. We use the harder four-AP Jacobs Hall space, where one AP is behind a wall and plasma screens create heavy multipath. (~50 s)</aside>
+    <footer class="slide-foot"><span class="brand">E-JUST · Lightweight WiFi Localization</span><span>Dataset</span></footer>
+  </section>
+
+  <!-- 12. SESSIONS -->
+  <section class="slide">
+    <span class="kicker">Dataset</span>
+    <h2>Five sessions — increasing difficulty</h2>
+    <div class="body">
+      <table class="t">
+        <thead><tr><th>#</th><th>Session</th><th>Condition</th><th class="r">Samples</th><th>Role</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>jacobs_Jul28</td><td>standard, no furniture</td><td class="r">17,574 train</td><td>train</td></tr>
+          <tr><td>2</td><td>jacobs_Jul28_2</td><td>same setup, ~1 h later</td><td class="r">4,260 test</td><td>in-distribution test</td></tr>
+          <tr><td>3</td><td>jacobs_Aug16_1</td><td>random furniture added</td><td class="r">11,201</td><td>cross-session</td></tr>
+          <tr><td>4</td><td>jacobs_Aug16_3</td><td>different furniture</td><td class="r">8,754</td><td>cross-session</td></tr>
+          <tr><td>5</td><td>jacobs_Aug16_4_ref</td><td>+ aluminium reflector</td><td class="r">5,486</td><td>cross-session (hardest)</td></tr>
+        </tbody>
+      </table>
+      <div class="callout" style="margin-top:14px"><b>Why this matters</b>Sessions 3–5 were captured three weeks later under progressively harder conditions. The <strong>reflector</strong> in Session 5 injects strong specular multipath — "phantom" locations — and is the hardest test of generalization.</div>
+    </div>
+    <aside class="notes">There are five sessions. Sessions 1 and 2 are the same room an hour apart — that's our in-distribution train/test split, about 17,500 training and 4,260 test samples. Sessions 3 to 5 were collected three weeks later with furniture changes and, in session 5, an aluminium reflector — these test cross-session generalization, and the reflector is the hardest case. Keep these five in mind for the results. (~45 s)</aside>
+    <footer class="slide-foot"><span class="brand">E-JUST · Lightweight WiFi Localization</span><span>Dataset</span></footer>
+  </section>
+
+  <!-- 13. EXPERIMENTAL SETUP / DATASPLITS -->
+  <section class="slide">
+    <span class="kicker">Experimental setup</span>
+    <h2>The runs — and why each split</h2>
+    <div class="body">
+      <table class="t" style="font-size:17px">
+        <thead><tr><th>Experiment</th><th>Training data</th><th>Tested on</th><th>Why this split</th></tr></thead>
+        <tbody>
+          <tr><td><strong>In-distribution</strong></td><td>Sess 1 + 2-train (17,574)</td><td>Sess 2 held-out (4,260)</td><td>accuracy, scheduler, multi-seed</td></tr>
+          <tr><td><strong>Robustness</strong></td><td>same as above</td><td>Sess 2, corrupted at test</td><td>deployed robustness — no retraining</td></tr>
+          <tr><td><strong>Cross-session (LOSO)</strong></td><td>3 setups (leave one Aug out)</td><td>held-out Aug session</td><td><span class="hl">matches the DLoc paper</span> — fair comparison</td></tr>
+          <tr><td><strong>Zero-shot</strong></td><td>2 July sessions only</td><td>Aug 3–5</td><td>internal ablation under a harder shift</td></tr>
+        </tbody>
+      </table>
+      <div class="callout why" style="margin-top:12px"><b>Two things examiners ask</b>LOSO is <strong>standalone-only</strong> because distilling would need a fresh teacher per fold — so it stays directly comparable to published DLoc. Training on H100 GPUs (Vast.ai); benchmarking on a local RTX&nbsp;3060.</div>
+    </div>
+    <aside class="notes">This is the slide that answers "which split for which run, and why." In-distribution and robustness use the standard session-1-plus-2 split — robustness just corrupts the input at test time, no retraining, to measure deployed behavior. Cross-session uses leave-one-session-out, which exactly matches DLoc's published protocol so the comparison is fair — and it's standalone-only because distilling would need a new teacher per fold. Zero-shot trains on July only; it's an internal ablation, not a DLoc comparison. If anyone asks mid-talk about a specific model's split, this is where we point. (~60 s)</aside>
+    <footer class="slide-foot"><span class="brand">E-JUST · Lightweight WiFi Localization</span><span>Setup</span></footer>
+  </section>
+
+  <!-- 20. COMPARISON -->
+  <section class="slide">
+    <span class="kicker">Results</span>
+    <h2>All five, side by side</h2>
+    <div class="body cols">
+      <div class="fig"><img src="figures/pareto.png" alt="accuracy vs size">
+        <figcaption>Lower-left is better. The U-Net sits at the sweet spot.</figcaption></div>
+      <div style="align-self:center">
+        <table class="t" style="font-size:16px">
+          <thead><tr><th>Model</th><th class="r">Params</th><th class="r">Median</th><th>Note</th></tr></thead>
+          <tbody>
+            <tr><td>DLoc</td><td class="r">16.5M</td><td class="r">0.707</td><td>teacher</td></tr>
+            <tr><td>MobileNetV2</td><td class="r">2.3M</td><td class="r">0.707</td><td>lossless</td></tr>
+            <tr><td>TinyCNN</td><td class="r">47K</td><td class="r">3.922</td><td>floor</td></tr>
+            <tr class="best"><td class="best-txt">MobileNetV2-UNet</td><td class="r">2.41M</td><td class="r best-txt">0.640</td><td>best</td></tr>
+            <tr><td>Mamba</td><td class="r">0.65M</td><td class="r worst-txt">10.56</td><td>mismatch</td></tr>
+          </tbody>
+        </table>
+        <div class="callout" style="margin-top:12px;font-size:17px"><b>The story in one line</b>Strip capacity (MobileNetV2) → don't strip too much (TinyCNN) → add the <em>right</em> structure (U-Net) → don't change the framing (Mamba).</div>
+      </div>
+    </div>
+    <aside class="notes">Here are all five together. On the accuracy-versus-size plot, lower-left is better, and the U-Net sits right in the sweet spot — best accuracy at a fraction of DLoc's size. The table tells the story along the size axis: MobileNetV2 strips capacity losslessly; TinyCNN strips too much; the U-Net adds the right structure and wins; Mamba changes the framing and breaks. (~45 s)</aside>
+    <footer class="slide-foot"><span class="brand">E-JUST · Lightweight WiFi Localization</span><span>Results</span></footer>
+  </section>
+
+  <!-- ============ EXPERIMENTS & RESULTS (one slide per experiment) ============ -->
+
+  <!-- R1: IN-DISTRIBUTION ACCURACY -->
+  <section class="slide">
+    <span class="kicker">Results · Experiment 1 / 6</span>
+    <h2>In-distribution accuracy</h2>
+    <div class="body cols w7">
+      <div style="align-self:center">
+        <table class="t" style="font-size:15px">
+          <thead><tr><th>Model</th><th class="r">Params</th><th>Mode</th><th class="r">Median</th><th class="r">P90</th><th class="r">P99</th></tr></thead>
+          <tbody>
+            <tr><td>DLoc baseline</td><td class="r">16.5M</td><td>&mdash;</td><td class="r">0.707</td><td class="r">~1.6</td><td class="r">~4.0</td></tr>
+            <tr><td>MobileNetV2</td><td class="r">2.3M</td><td>Standalone</td><td class="r">0.707</td><td class="r">1.616</td><td class="r">3.992</td></tr>
+            <tr><td>MobileNetV2</td><td class="r">2.3M</td><td>Distilled</td><td class="r">0.707</td><td class="r">1.612</td><td class="r">4.003</td></tr>
+            <tr><td>TinyCNN</td><td class="r">47K</td><td>Standalone</td><td class="r">3.922</td><td class="r">13.919</td><td class="r">23.244</td></tr>
+            <tr><td>TinyCNN</td><td class="r">47K</td><td>Distilled</td><td class="r">3.706</td><td class="r">14.784</td><td class="r">25.101</td></tr>
+            <tr><td>MobileNetV2-UNet</td><td class="r">2.41M</td><td>Standalone</td><td class="r">0.640</td><td class="r">1.523</td><td class="r">2.750</td></tr>
+            <tr class="best"><td class="best-txt">MobileNetV2-UNet</td><td class="r">2.41M</td><td>Distilled</td><td class="r best-txt">0.640</td><td class="r best-txt">1.513</td><td class="r best-txt">2.587</td></tr>
+          </tbody>
+        </table>
+        <p class="note-row">Session 2 held-out test, N = 4,260. Median / P90 / P99 in metres.</p>
+      </div>
+      <div style="align-self:center">
+        <div class="fig"><img src="figures/cdf_indist.png" alt="in-distribution error CDF">
+          <figcaption>Error CDF from authentic per-sample arrays.</figcaption></div>
+        <div class="callout why" style="margin-top:8px;font-size:16px"><b>Read it</b>MobileNetV2 is lossless (0.707&nbsp;m = DLoc); the U-Net beats both at 0.640&nbsp;m with the tightest tail (P99 2.587&nbsp;m).</div>
+      </div>
+    </div>
+    <aside class="notes">Experiment one — in-distribution accuracy on the held-out session. The key rows: MobileNetV2 matches DLoc exactly at 0.707 meters, lossless seven-times compression; TinyCNN at 47K is five times worse; and the U-Net beats the teacher at 0.640 with the tightest tail. The CDF on the right is from real per-sample errors, not summary statistics. (~40 s)</aside>
+    <footer class="slide-foot"><span class="brand">E-JUST · Lightweight WiFi Localization</span><span>Results</span></footer>
+  </section>
+
+  <!-- R2: LR SCHEDULER STUDY -->
+  <section class="slide">
+    <span class="kicker">Results · Experiment 2 / 6</span>
+    <h2>Learning-rate scheduler study</h2>
+    <div class="body cols">
+      <div class="fig"><img src="figures/scheduler.png" alt="scheduler tail percentiles">
+        <figcaption>Same median; cosine trims the tail.</figcaption></div>
+      <div style="align-self:center">
+        <table class="t" style="font-size:16px">
+          <thead><tr><th>Scheduler</th><th>Mode</th><th class="r">Median</th><th class="r">P90</th><th class="r">P99</th></tr></thead>
+          <tbody>
+            <tr><td>Cosine</td><td>Standalone</td><td class="r">0.640</td><td class="r">1.523</td><td class="r">2.750</td></tr>
+            <tr><td>Step</td><td>Standalone</td><td class="r">0.640</td><td class="r">1.552</td><td class="r">2.918</td></tr>
+            <tr class="best"><td>Cosine</td><td>Distilled</td><td class="r">0.640</td><td class="r best-txt">1.513</td><td class="r best-txt">2.587</td></tr>
+          </tbody>
+        </table>
+        <div class="callout" style="margin-top:12px;font-size:16px"><b>Second-order effect</b>All three reach the same 0.640&nbsp;m median &mdash; same optimum. Cosine only trims the tail (P90 &minus;1.9%, P99 &minus;5.8%). Architecture dominates, not the scheduler.</div>
+      </div>
+    </div>
+    <aside class="notes">Experiment two, the scheduler study — this one's quick. Cosine and step both reach the exact same 0.640 median, so they find the same optimum; cosine just gives a slightly tighter tail. The takeaway: the scheduler is a second-order knob, architecture is what moves the needle. (~20 s — can skip under time pressure)</aside>
+    <footer class="slide-foot"><span class="brand">E-JUST · Lightweight WiFi Localization</span><span>Results</span></footer>
+  </section>
+
+  <!-- R3: ROBUSTNESS -->
+  <section class="slide">
+    <span class="kicker">Results · Experiment 3 / 6</span>
+    <h2>Robustness under signal degradation</h2>
+    <div class="body cols">
+      <div class="fig"><img src="figures/robustness.png" alt="robustness under noise">
+        <figcaption>Skips give 5.5&times; noise robustness; distillation rescues plain MobileNetV2.</figcaption></div>
+      <div style="align-self:center">
+        <table class="t" style="font-size:15px">
+          <thead><tr><th>Condition</th><th class="r">MNv2 st.</th><th class="r">MNv2 di.</th><th class="r">U-Net st.</th><th class="r">U-Net di.</th></tr></thead>
+          <tbody>
+            <tr><td>Normal</td><td class="r">0.707</td><td class="r">0.707</td><td class="r">0.640</td><td class="r">0.640</td></tr>
+            <tr><td>Noise &sigma;=0.1</td><td class="r worst-txt">16.368</td><td class="r">4.769</td><td class="r best-txt">3.000</td><td class="r">3.469</td></tr>
+            <tr><td>Noise &sigma;=0.2</td><td class="r">16.307</td><td class="r">5.369</td><td class="r">5.741</td><td class="r">5.320</td></tr>
+            <tr><td>Random 2-AP dropout</td><td class="r">2.402</td><td class="r">2.516</td><td class="r">3.324</td><td class="r best-txt">2.730</td></tr>
+            <tr><td>Attenuation 0.5&times;</td><td class="r">1.342</td><td class="r">1.500</td><td class="r">1.077</td><td class="r">1.105</td></tr>
+            <tr><td>Blur k=5</td><td class="r">0.849</td><td class="r">0.854</td><td class="r">0.671</td><td class="r">0.656</td></tr>
+          </tbody>
+        </table>
+        <p class="note-row">Median error (m). st.=standalone, di.=distilled. Distillation wins noise (MNv2) &amp; dropout (U-Net); skips win noise overall.</p>
+      </div>
+    </div>
+    <aside class="notes">Experiment three, robustness — we corrupt the input at test time, no retraining, to mimic deployment. Under noise, plain MobileNetV2 collapses to 16 meters but distillation pulls it back under 5; the U-Net's skips hold it at 3 on their own. And on AP dropout, distillation is what helps the U-Net. Two different mechanisms — skips for noise, distillation for dropout. (~45 s)</aside>
+    <footer class="slide-foot"><span class="brand">E-JUST · Lightweight WiFi Localization</span><span>Results</span></footer>
+  </section>
+
+  <!-- R4: CROSS-SESSION (LOSO) -->
+  <section class="slide">
+    <span class="kicker">Results · Experiment 4 / 6</span>
+    <h2>Cross-session generalization (LOSO)</h2>
+    <div class="body cols">
+      <div class="fig"><img src="figures/crosssession.png" alt="cross-session vs DLoc">
+        <figcaption>Leave-one-session-out, 3 seeds, vs published DLoc.</figcaption></div>
+      <div style="align-self:center">
+        <table class="t" style="font-size:17px">
+          <thead><tr><th>Fold</th><th class="r">Ours (m)</th><th class="r">DLoc</th></tr></thead>
+          <tbody>
+            <tr><td>Aug16_1 (furniture)</td><td class="r">0.852 &plusmn; .044</td><td class="r">0.71</td></tr>
+            <tr class="best"><td>Aug16_3 (diff. furn.)</td><td class="r best-txt">0.822 &plusmn; .040</td><td class="r">0.82</td></tr>
+            <tr><td>Aug16_4_ref (reflector)</td><td class="r">1.116 &plusmn; .016</td><td class="r">1.05</td></tr>
+            <tr><td><strong>Mean</strong></td><td class="r"><strong>0.930</strong></td><td class="r">0.86</td></tr>
+          </tbody>
+        </table>
+        <div class="callout why" style="margin-top:10px;font-size:16px"><b>Fair comparison</b>Standalone-only, 3 seeds &mdash; exactly DLoc's protocol. At 2.41M vs 16.5M params: matches on different-furniture, and beats DLoc's P90 on the reflector fold.</div>
+      </div>
+    </div>
+    <aside class="notes">Experiment four, the headline generalization result. Leave-one-session-out, standalone-only, three seeds — exactly DLoc's published protocol, so the comparison is fair. We average 0.93 against DLoc's 0.86, match on different-furniture, and beat DLoc's P90 on the hardest reflector fold — at 6.8 times fewer parameters. (~45 s)</aside>
+    <footer class="slide-foot"><span class="brand">E-JUST · Lightweight WiFi Localization</span><span>Results</span></footer>
+  </section>
+
+  <!-- R5: MULTI-SEED STABILITY -->
+  <section class="slide">
+    <span class="kicker">Results · Experiment 5 / 6</span>
+    <h2>Multi-seed statistical stability</h2>
+    <div class="body cols">
+      <div class="fig"><img src="figures/multiseed.png" alt="multi-seed baseline medians">
+        <figcaption>Baseline median across 3 seeds vs the U-Net result.</figcaption></div>
+      <div style="align-self:center">
+        <table class="t" style="font-size:17px">
+          <thead><tr><th>Seed</th><th class="r">Median</th><th class="r">P90</th><th class="r">P99</th></tr></thead>
+          <tbody>
+            <tr><td>42</td><td class="r">0.825</td><td class="r">2.402</td><td class="r">22.672</td></tr>
+            <tr><td>123</td><td class="r">0.906</td><td class="r">2.335</td><td class="r">7.714</td></tr>
+            <tr><td>777</td><td class="r">0.894</td><td class="r">2.102</td><td class="r">8.694</td></tr>
+            <tr class="best"><td><strong>Mean &plusmn; Std</strong></td><td class="r"><strong>0.875 &plusmn; .036</strong></td><td class="r">2.280 &plusmn; .128</td><td class="r">13.03 &plusmn; 6.83</td></tr>
+          </tbody>
+        </table>
+        <div class="callout" style="margin-top:10px;font-size:16px"><b>Why it matters</b>Median CV is only 4.1% &mdash; single-seed numbers are representative. The U-Net's 0.640&nbsp;m sits 6.5&nbsp;&sigma; below this band: a real gain, not a lucky seed.</div>
+      </div>
+    </div>
+    <aside class="notes">Experiment five — is the result luck? We ran the baseline across three seeds: the median varies only plus-or-minus 0.036, a four-percent coefficient of variation. The U-Net's 0.640 sits six-and-a-half sigma below that band, so the improvement is real. Another quick slide. (~20 s — can skip under time pressure)</aside>
+    <footer class="slide-foot"><span class="brand">E-JUST · Lightweight WiFi Localization</span><span>Results</span></footer>
+  </section>
+
+  <!-- R6: COMPUTATIONAL EFFICIENCY -->
+  <section class="slide">
+    <span class="kicker">Results · Experiment 6 / 6</span>
+    <h2>Computational efficiency (batch&nbsp;1)</h2>
+    <div class="body cols">
+      <div class="fig"><img src="figures/efficiency.png" alt="efficiency: DLoc vs U-Net">
+        <figcaption>U-Net vs DLoc: 56&times; fewer FLOPs, 10&times; less CPU latency.</figcaption></div>
+      <div style="align-self:center">
+        <table class="t" style="font-size:17px">
+          <thead><tr><th>Model</th><th class="r">Params</th><th class="r">FLOPs</th><th class="r">CPU</th><th class="r">GPU</th></tr></thead>
+          <tbody>
+            <tr><td>DLoc</td><td class="r">16.5M</td><td class="r">81.06G</td><td class="r">270.9</td><td class="r">16.2</td></tr>
+            <tr><td>MobileNetV2</td><td class="r">2.27M</td><td class="r">1.28G</td><td class="r">17.9</td><td class="r">6.3</td></tr>
+            <tr><td>TinyCNN</td><td class="r">47K</td><td class="r">0.66G</td><td class="r">9.1</td><td class="r">1.5</td></tr>
+            <tr class="best"><td class="best-txt">MobileNetV2-UNet</td><td class="r">2.41M</td><td class="r">1.45G</td><td class="r">27.2</td><td class="r">4.5</td></tr>
+          </tbody>
+        </table>
+        <p class="note-row">ms latency (batch 1). U-Net: 56&times; fewer FLOPs, 10&times; less CPU latency than DLoc.</p>
+      </div>
+    </div>
+    <aside class="notes">Experiment six, efficiency at batch one. The headline is the U-Net versus DLoc: 56 times fewer FLOPs and ten times less CPU latency — 27 milliseconds — at better accuracy. That 27 milliseconds is exactly what makes edge deployment realistic, and it sets up our future work. (~35 s)</aside>
+    <footer class="slide-foot"><span class="brand">E-JUST · Lightweight WiFi Localization</span><span>Results</span></footer>
+  </section>
+
+  <!-- 21. CONCLUSION -->
+  <section class="slide">
+    <span class="kicker">Conclusion</span>
+    <h2>What we found</h2>
+    <div class="body">
+      <ul class="bullets" style="font-size:20px">
+        <li><strong>DLoc is over-parameterized</strong> — 7.2&times; compression is lossless in distribution.</li>
+        <li><strong>Architecture beats parameters</strong> — U-Net skips give 0.640&nbsp;m, beating the teacher at 6.8&times; smaller.</li>
+        <li><strong>Distillation buys robustness, not accuracy</strong> — 3.4&times; under noise — with a <strong>~2M capacity threshold</strong> below which it harms.</li>
+        <li><strong>Two robustness mechanisms</strong> — skips (noise) and distillation (AP dropout) — complementary, not additive.</li>
+        <li><strong>Competitive cross-session</strong> at 6.8&times; compression and <strong>56&times; lower compute</strong>.</li>
+      </ul>
+      <div class="callout" style="margin-top:12px"><b>Bottom line</b>DLoc's cost is <strong>not inherent</strong> — a model an order of magnitude smaller can meet or beat it, ready for the edge.</div>
+    </div>
+    <aside class="notes">To conclude — five findings. One: DLoc is over-parameterized; 7.2x compression is lossless. Two: architecture beats parameters; the U-Net's skips beat the teacher at 6.8x smaller. Three: distillation buys robustness, not accuracy, and only above a ~2-million-parameter threshold. Four: the two robustness mechanisms are complementary. Five: competitive cross-session at 56x lower compute. Bottom line: DLoc's cost is not inherent — an order-of-magnitude-smaller model can match or beat it, ready for the edge. (~55 s)</aside>
+    <footer class="slide-foot"><span class="brand">E-JUST · Lightweight WiFi Localization</span><span>Conclusion</span></footer>
+  </section>
+
+  <!-- 22. FUTURE WORK -->
+  <section class="slide">
+    <span class="kicker">Future work</span>
+    <h2>Where this goes next</h2>
+    <div class="body">
+      <ul class="bullets" style="font-size:20px">
+        <li><strong>Deploy on E-JUST edge devices</strong> — 27&nbsp;ms CPU makes the U-Net a real candidate.</li>
+        <li><strong>Collect a new CSI dataset at E-JUST</strong> — test transfer to a different building.</li>
+        <li><strong>Multi-seed the students</strong> — significance testing (de-scoped here for compute budget).</li>
+        <li><strong>Train-time corruption augmentation</strong> — we only corrupt at test time today.</li>
+        <li><strong>Architecture search</strong> — attention on the skips, or Mamba <em>layers</em> inside a 2-D model.</li>
+      </ul>
+    </div>
+    <aside class="notes">Future work. The immediate next step is actually deploying the U-Net on edge hardware at E-JUST — 27 milliseconds on CPU makes that realistic. Then collecting our own CSI dataset in a different building to test transfer. We'd also multi-seed the students for significance, add training-time corruption augmentation, and explore attention on the skips. (~35 s)</aside>
+    <footer class="slide-foot"><span class="brand">E-JUST · Lightweight WiFi Localization</span><span>Future work</span></footer>
+  </section>
+
+  <!-- 23. THANK YOU -->
+  <section class="slide title-slide">
+    <div class="eyebrow">Thank you</div>
+    <h1>Questions?</h1>
+    <div class="sub">A 2.41&nbsp;M model that matches DLoc — 6.8&times; smaller, 56&times; cheaper.</div>
+    <div class="rule"></div>
+    <div class="who"><div class="names">Abdulrahman M. Ebrahim · Ahmed E. Haggag · Fadwa Y. Mahmoud</div>
+      <div>Supervisor: Prof. Ehab Elshazly · E-JUST</div></div>
+    <aside class="notes">Thank you — we're happy to take questions. The six results slides cover accuracy, scheduler, robustness, cross-session, multi-seed, and efficiency in full; the remaining backup slides hold the quantization caveat, dataset internals, and qualitative heatmaps.</aside>
+    <footer class="slide-foot"><span class="brand">E-JUST · Lightweight WiFi Localization</span><span>Q&amp;A</span></footer>
+  </section>
+
+  <!-- ===================== BACKUP SLIDES ===================== -->
+
+  <!-- B3: metric + quantization -->
+  <section class="slide backup">
+    <span class="kicker">Backup</span>
+    <h2>The metric &amp; a quantization caveat</h2>
+    <div class="body cols">
+      <div class="fig"><img src="figures/cdf_indist.png" alt="CDF"></div>
+      <div style="align-self:center">
+        <ul class="bullets" style="font-size:18px">
+          <li>Error = 0.1 × pixel distance between predicted and true peak.</li>
+          <li>We report median, P90, P99, mean, and the full CDF.</li>
+        </ul>
+        <div class="callout warnbox" style="margin-top:10px"><b>Why identical medians appear</b>Pixel distances quantize the error to multiples of 0.1·√n. Two models can share a median yet differ in distribution — so we never argue from the median alone; we use the mean, percentiles, and CDF.</div>
+      </div>
+    </div>
+    <aside class="notes">Backup: the metric is a scaled pixel distance, so errors are quantized to a lattice — which is why some models report the exact same median. We always back it up with mean, percentiles, and the CDF, shown here from the real per-sample errors.</aside>
+    <footer class="slide-foot"><span class="brand">E-JUST · Lightweight WiFi Localization</span><span>Backup</span></footer>
+  </section>
+
+  <!-- B4: dataset internals -->
+  <section class="slide backup">
+    <span class="kicker">Backup</span>
+    <h2>From CSI to heatmaps (dataset internals)</h2>
+    <div class="body">
+      <ul class="bullets" style="font-size:18px">
+        <li>MATLAB pipeline converts each AP's complex CSI into a 2-D AoA–ToF profile, projected onto the floor grid.</li>
+        <li>Distance grid −10:0.1:30&nbsp;m · angle grid −π/2:0.01:π/2 · label = 2-D Gaussian, σ=0.3&nbsp;m at the SLAM position.</li>
+        <li>Two input versions: <strong>with</strong> ToF offset (network input) and <strong>without</strong> (consistency-decoder target).</li>
+        <li>Grid 161×361 at 0.1&nbsp;m/pixel → covers 16.1&nbsp;m × 36.1&nbsp;m. Files are HDF5 (dims reversed on load).</li>
+      </ul>
+      <div class="callout" style="margin-top:8px"><b>Ground truth</b>SLAM (RTAB-Map) validated against an HTC Vive tracker — median error ≈ 5.7&nbsp;cm.</div>
+    </div>
+    <aside class="notes">Backup: the dataset internals — how raw CSI becomes the AoA-ToF heatmaps, the search grids, the Gaussian label, and the with/without-offset versions that feed the two decoders. Ground truth comes from SLAM, accurate to about 5.7 cm.</aside>
+    <footer class="slide-foot"><span class="brand">E-JUST · Lightweight WiFi Localization</span><span>Backup</span></footer>
+  </section>
+
+  <!-- B6: qualitative heatmaps -->
+  <section class="slide backup">
+    <span class="kicker">Backup</span>
+    <h2>Qualitative predictions</h2>
+    <div class="body" style="display:flex;flex-direction:column;gap:10px;justify-content:center">
+      <div class="fig" style="height:auto"><img src="figures/heatmaps_unet_fig10b.png" alt="in-distribution heatmaps">
+        <figcaption>In-distribution: tight, single-mode peaks (white circle = truth, red cross = prediction).</figcaption></div>
+      <div class="fig" style="height:auto"><img src="figures/heatmaps_unet_cross_env4.png" alt="reflector heatmaps">
+        <figcaption>Reflector fold: extra scattered "phantom" mass — the specular reflections — drive the larger errors.</figcaption></div>
+    </div>
+    <aside class="notes">Backup: actual predicted heatmaps from the U-Net. In-distribution they're tight and single-peaked; on the reflector fold you can see the phantom reflections — exactly what a consistency decoder would suppress.</aside>
+    <footer class="slide-foot"><span class="brand">E-JUST · Lightweight WiFi Localization</span><span>Backup</span></footer>
+  </section>
+
+  </div><!-- /stage -->
+</div><!-- /deck -->
+
+<div id="hud"><div id="bar"></div></div>
+<div id="counter"></div>
+<div id="hint">← → navigate · S notes · F fullscreen</div>
+<div id="notes"><h4>Speaker notes</h4><div class="nbody"></div></div>
+
+<script src="js/deck.js"></script>
+</body>
+</html>

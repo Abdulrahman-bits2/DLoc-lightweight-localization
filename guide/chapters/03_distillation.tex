@@ -1,0 +1,143 @@
+%% ====================================================================
+%%  Chapter 3 — Knowledge Distillation
+%% ====================================================================
+\chapter{Knowledge Distillation}
+\label{ch:distill}
+
+Knowledge distillation (KD) is the second of the two levers the thesis pulls (the first being
+architecture). It is the mechanism by which a small ``student'' learns to behave like a large
+``teacher.'' This chapter explains the original idea, then the twist that makes it work for a
+\emph{heatmap regression} problem instead of classification, and previews \emph{why} ---in our task---
+it turns out to help robustness rather than raw accuracy.
+
+\section{The original idea: soft targets and dark knowledge}
+\label{sec:distill:hinton}
+
+KD was introduced by Hinton, Vinyals, and Dean. The setup: you already have a big, accurate
+\textbf{teacher} network, and you want a small \textbf{student} that runs cheaply but behaves the
+same. The student is trained against two targets at once:
+\begin{itemize}[leftmargin=1.4em,nosep]
+  \item the usual \textbf{hard labels} (the ground truth), and
+  \item the teacher's \textbf{soft labels} ---its full output distribution, not just its top answer.
+\end{itemize}
+In a classifier, the hard label is one-hot (``this is a cat,'' i.e.\ $[0,1,0,\dots]$). The teacher's
+soft label, by contrast, might say ``$90\%$ cat, $9\%$ dog, $1\%$ car.'' That extra structure ---the
+fact that the teacher thinks cat is much more like dog than like car--- is what Hinton called
+\textbf{dark knowledge}: information about how classes relate that the one-hot label simply does not
+contain. Soft labels are usually produced by dividing the logits by a \emph{temperature} before the
+softmax, which deliberately smooths the distribution to expose this structure.
+
+\section{Why soft targets help}
+\label{sec:distill:why}
+
+Soft targets help for two compounding reasons:
+\begin{enumerate}[leftmargin=1.6em,nosep]
+  \item \textbf{Richer supervision.} Each training example carries a whole distribution of
+  information instead of a single bit, so the student learns more per example.
+  \item \textbf{Regularization.} The smoothed target discourages the student from becoming
+  over-confident and pushes its internal features toward the teacher's better-behaved ones, which
+  tends to generalize better.
+\end{enumerate}
+Hold on to the \emph{regularization} view ---it is the one that carries over to our task.
+
+\section{Distillation for a heatmap regression task}
+\label{sec:distill:ours}
+
+Our task is not classification: the target is a \emph{spatial heatmap}, a 2D Gaussian bump over the
+floor (Ch.~\ref{ch:foundations}). This changes distillation in a subtle but important way. There is no
+softmax and no temperature to tune ---but the teacher's output is \emph{already soft by
+construction}. DLoc does not emit a single hard pixel; it emits a heatmap with probability mass
+\emph{spread around} the predicted location, reflecting its own uncertainty. That spread is exactly
+the analogue of dark knowledge: it encodes ``the device is most likely here, but plausibly in this
+surrounding region.''
+
+\begin{keyidea}
+In classification, you must \emph{manufacture} soft targets by raising the softmax temperature. In our
+heatmap task, the teacher's targets are \emph{born soft}: the Gaussian-like spread of probability mass
+around the location is the dark knowledge. Distillation here is therefore a form of \textbf{spatial
+label smoothing}.
+\end{keyidea}
+
+\section{The combined loss and teacher precomputation}
+\label{sec:distill:loss}
+
+Each student is trained in two modes: \textbf{standalone} (ground truth only) and \textbf{distilled}
+(ground truth plus teacher). The distilled objective is a convex combination of a ground-truth term
+and a teacher-matching term:
+\[
+  \mathcal{L} \;=\; \alpha\cdot \mathrm{MSE}(\hat{y},\,y) \;+\; \beta\cdot \mathrm{MSE}(\hat{y},\,y_T),
+  \qquad \alpha = 0.7,\;\; \beta = 0.3,
+\]
+where $\hat y$ is the student's predicted heatmap, $y$ is the ground-truth Gaussian, and $y_T$ is the
+teacher's output heatmap. The weights $0.7/0.3$ keep the ground truth dominant while letting the
+teacher's softer target gently regularize the student.
+
+A practical implementation detail makes this tractable. The teacher is \emph{fixed}, so its output for
+every training and test example is \textbf{precomputed once and cached to disk} ($\approx$4.09\,GB for
+the training split, $\approx$0.99\,GB for the test split). During student training, $y_T$ is just read
+from cache ---the 16.5\,M-parameter teacher is \emph{never} run in the training loop. This is what
+makes it feasible to distill many students across many random seeds.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[font=\small,
+  big/.style={draw=accent,fill=accent!10,rounded corners,minimum width=2.6cm,minimum height=0.95cm,align=center},
+  small/.style={draw=accent2!70!black,fill=accent2!14,rounded corners,minimum width=2.6cm,minimum height=0.95cm,align=center},
+  data/.style={draw=black!55,fill=lightgray,rounded corners,minimum width=2.2cm,minimum height=0.85cm,align=center},
+  arr/.style={-{Stealth[length=2.2mm]},thick},
+  loss/.style={draw=accent3!70!black,fill=accent3!12,rounded corners,minimum width=2.0cm,minimum height=0.85cm,align=center}]
+\node[data] (x) {CSI input};
+\node[big,right=1.0cm of x] (teach) {DLoc teacher\\(frozen, 16.5\,M)};
+\node[data,right=1.0cm of teach] (yt) {cached $y_T$\\(precomputed)};
+\node[small,below=1.4cm of teach] (stud) {Student\\(2--47\,K params)};
+\node[loss,right=1.0cm of stud] (l) {$\mathcal{L}=0.7\,\mathrm{MSE}(\hat y,y)$\\$+\,0.3\,\mathrm{MSE}(\hat y,y_T)$};
+\node[data,below=1.2cm of x] (gt) {ground truth $y$};
+\draw[arr] (x) -- (teach);
+\draw[arr] (teach) -- (yt);
+\draw[arr] (x) |- (stud);
+\draw[arr] (stud) -- node[below,font=\footnotesize]{$\hat y$} (l);
+\draw[arr] (yt) -- (l);
+\draw[arr] (gt) -| (l);
+\end{tikzpicture}
+\caption{Distillation data flow. The frozen teacher's outputs $y_T$ are precomputed once and cached;
+the student is then trained to match a $0.7/0.3$ blend of the ground truth and the cached teacher
+output, so the expensive teacher never runs during student training.}
+\label{fig:distill:flow}
+\end{figure}
+
+\section{What the soft heatmap actually teaches}
+\label{sec:distill:smoothing}
+
+Because $y_T$ is a slightly blurred, uncertainty-aware version of the truth, asking the student to
+match it nudges the student to reproduce not just the peak but the \emph{shape of plausible
+locations} around it. This smooths the student's internal representation. The effect on results turns
+out to depend entirely on \emph{where} you test:
+\begin{itemize}[leftmargin=1.4em,nosep]
+  \item \textbf{In-distribution}, the teacher's output is almost identical to the ground truth, so the
+  teacher term is redundant ---and indeed standalone and distilled models reach the \emph{same}
+  in-distribution median (Ch.~\ref{ch:arch}--\ref{ch:findings}).
+  \item \textbf{Off-distribution} (noise, dropped APs, a new session), that smoothing becomes a real
+  regularizer, and the distilled student degrades far more gracefully.
+\end{itemize}
+
+\begin{defensetip}
+If asked ``why distill if it doesn't improve accuracy?'', answer: \emph{because accuracy was never the
+goal of distillation here}. In this spatial-regression setting distillation is a \textbf{robustness}
+and \textbf{generalization} technique ---it is redundant in clean conditions but valuable exactly when
+the signal degrades, which is the realistic deployment case.
+\end{defensetip}
+
+\section{A preview of the dual nature}
+\label{sec:distill:dual}
+
+Distillation has \emph{two opposite} effects depending on student capacity, a theme developed fully in
+Chapters~\ref{ch:arch} and~\ref{ch:findings}:
+\begin{itemize}[leftmargin=1.4em,nosep]
+  \item For models \emph{above} $\sim$2\,M parameters (MobileNetV2, MobileNetV2-UNet), distillation
+  \emph{helps} ---notably a $3.4\times$ improvement in Gaussian-noise robustness for MobileNetV2.
+  \item For models \emph{below} that capacity floor (TinyCNN, 47\,K), distillation \emph{harms}: the
+  student spends its scarce capacity imitating the teacher's modeled AP interactions and has nothing
+  left to fall back on when an AP drops.
+\end{itemize}
+This capacity threshold is one of the thesis's more interesting findings, and it follows directly from
+the regularization view of distillation developed in this chapter.

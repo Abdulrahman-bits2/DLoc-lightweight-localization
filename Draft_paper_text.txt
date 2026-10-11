@@ -1,0 +1,351 @@
+Knowledge Distillation and Compression of DLoc for WiFi Indoor Localization
+
+---> MobileNetV2 2,343,073 7.2x --> MobileNetV2-UNet 2,413,577 6.8x
+
+---> TinyCNN 47,241 351x
+
+---> Mamba 653,827 25x
+
+ABSTRACT:
+
+Locating humans and devices indoors is important for many applications, from asset and patient tracking to augmented and robotic navigation.  GPS performs poorly inside.  The dominant indoor localization method is WiFi, where distances are inferred from the attenuation of the Channel State Information (CSI) signals that every access point (AP) emits.  The state of the art is a deep learning model called DLoc that attains sub-meter accuracy by encoding CSI from four APs into a spatial heatmap of the device location. However, to perform so well, DLoc requires 16.5M parameters, far too heavy for edge deployment on the gateways, APs, or phones themselves. 
+
+This paper studies whether DLoc’s remarkable accuracy can be retained at a fraction of its cost. To do so, we compress DLoc into a family of lightweight students: MobileNetV2, a tiny CNN, a variant with U-Net-style skip connections, and a state-space (Mamba) variant. The goal is to learn a smaller model that matches DLoc’s accuracy; the best does better. We evaluate all students for accuracy, robustness, cross-session generalization, statistical stability, and cost. We find that our best model, MobileNetV2-UNet, lowers DLoc’s median error from 0.707 m to 0.640 m, a 9.5% improvement, while using only 2.41 M parameters (6.8× fewer) and 56× fewer floating-point operations. 
+
+MobileNetV2-UNet even matches DLoc on one fold of a leave-one-session-out protocol that tests for generalization to changes in the environment; on others it is always within 0.14 m of DLoc and within the same P90 value. Knowledge distillation improves robustness - models trained with it get 3.4× better median accuracy under Gaussian noise - but only helps if the student has above ~2 M parameters; below that, it harms accuracy. These results show that highly accurate and robust WiFi localization can be done with a lightweight model.
+
+Index Terms - Indoor localization; WiFi; Channel State Information (CSI); knowledge distillation; CNN; U-Net;
+
+I. INTRODUCTION
+
+Millions of GPS-enabled devices use outdoor localization every day. When people step indoors into malls, hospitals, warehouses, or even their homes, the signal drops and loses accuracy. Being able to perform the same task inside a building or on an individual floor has been studied for two decades.
+
+The strongest current contender is WiFi indoor localization [1], which relies on the Channel State Information (CSI) signals that every access point (AP) emits to estimate distances between AP and device. Because it is based on signal attenuation, it can localize devices to within sub-meter precision.
+
+A state-of-the-art WiFi indoor localization technique is called DLoc [1]. It uses deep learning to convert four sets of CSI signals into an image heatmap that shows where the device is located within the building’s floorplan. To build this mapping function, DLoc needs a large training set and an even larger model with 16.5 M parameters.
+
+The downside is DLoc’s size. Its heavy ResNet model requires high computing costs for training and evaluation because it needs many layers and filters to manage such a task.
+
+Given the success of DLoc as a teacher model that can improve sub-meter accuracy with such high resolution heatmaps, the question that we ask in this paper is if there exist alternative student models that can do similarly well but with far fewer parameters than 16.5 M.
+
+This research makes three contributions:
+
+(1) We present knowledge distillation results for compressing DLoc with a focus on understanding the threshold size below which distilling harms rather than helps and identifying architectural effects;
+
+(2) We introduce several different network architectures for improving computational efficiency and gain insights into what makes a good WiFi localizer;
+
+(3) We demonstrate competitive localization accuracy with respect to both DLoc’s own results and an independently published benchmark on the same WILD dataset [1].
+
+II. RELATED WORK
+
+A. Indoor Localization
+
+Indoor localization is important in areas like asset tracking for safety in hospitals or warehouses or even patient tracking in health care centers.
+
+WiFi signals have long been studied as an indoor solution [1]. The large-scale DLoc results on wireless and localization datasets show that its method works well for CSI-to-heatmap conversion.
+
+B. Knowledge Distillation
+
+A small student network mimics outputs of a large pre-trained teacher network to improve performance in generalization tasks [2].
+
+This idea has received more attention on classification tasks than on spatial problems similar to ours. The teacher outputs soft target heatmaps rather than one-hot maps for location probability distribution estimation.
+
+C. Efficient Network Architectures
+
+Many candidate architectures contain building blocks that have performed well on image-recognition benchmarks.
+
+These include residual connection networks [3], MobileNetV2 backbone networks [4], U-Net architectures [5], and state-space models (Mamba) [6].
+
+For vision problems such as indoor heatmap estimation, researchers studied Mamba [7].
+
+D. Robustness to Distribution Shift
+
+Good performance on clean test data does not guarantee robustness under corrupted inputs or distribution shifts [8].
+
+We create test sets with various types of CSI corruption that are absent from training data to study performance under distribution shift.
+
+III. METHOD
+
+A. The DLoc System and Dataset
+
+On the WILD dataset collected by NIST in Jacobs Hall at UC San Diego (Table I), DLoc takes four CSI images from four APs as input and outputs a single-channel heatmap.
+
+DLoc [1] uses ResNet as its encoder with two decoders: one location decoder for estimating position coordinates within the floorplan and another offset decoder for enforcing consistency across APs, totaling ≈16.5 M parameters.
+
+The predicted location corresponds to the peak value on the sigmoid heatmap output by DLoc.
+
+The WILD dataset consists of CSI images collected from the same building but under different conditions and times over multiple sessions spanning several months (Table I).
+
+We used Sessions 1-2 for training with a total of 17,574 samples.
+
+The smaller Session-2 split with N = 4,260 samples was for in-distribution experiments; the full set was used under a cross-session leave-one-session-out protocol (LOSO) as Session-2 is the only subset from summer.
+
+TABLE I
+
+DATASET SESSIONS AND CONDITIONS
+
+[Carry over thesis Table 3.1]
+
+B. Student Network Architectures
+
+All student networks share the same input and output specifications as the teacher model.
+
+Table II shows four students in increasing order of size:
+
+MobileNetV2 uses only 2.3 M parameters,
+
+TinyCNN is even smaller with only 47 K,
+
+MobileNetV2-UNet has slightly larger capacity at 2.41 M,
+
+while Mamba is an outlier with 0.65 M parameters.
+
+[Carry over thesis Table 3.2]
+
+MobileNetV2 adopts depthwise-separable convolutions to drastically reduce computational cost.
+
+UNet adds skip connections that concatenate features extracted from MobileNetV2’s encoder directly into its decoder input (Fig. 1).
+
+Despite smaller sizes than DLoc’s huge ResNet at ≈16.5 M, these students capture useful inductive biases from larger models relative to their capability.
+
+[Figure 1]
+
+The U-Net architecture adds skip connections to compensate for representation lost at bottleneck.
+
+C. Knowledge-Distillation Framework
+
+Given data pairs with input CSI image I and ground-truth heatmap label y,
+
+DLoc produces heatmap labels y_T without using predicted device locations y_hat; see equation (1).
+
+Both y and y_T are soft label maps showing probability distributions around true positions.
+
+Student models minimize error loss function measuring difference between outputs y_hat and both target maps:
+
+L = α MSE(y_hat,y) + β MSE(y_hat,y_T)
+
+Hyperparameters α and β weigh ground-truth (hard) and teacher (soft) labels.
+
+We empirically set α=0.7 and β=0.3 for all experiments.
+
+Teacher output heatmaps are computed offline; teacher never run during student training.
+
+D. Evaluation Metrics
+
+To compare locality estimation capacity,
+
+compute Euclidean distance e between points at argmax(ŷ) predicted by student and argmax(y) ground-truth:
+
+e = ||argmax(ŷ) - argmax(y)||₂ * 0.1 m (Eqn 2)
+
+CDistances converted via downsampling factor from CSI image pixel units to meters: 0 ≤ e ≤ ∞.
+
+Following [1] use median value of e over test set to minimize effect of outliers;
+
+also calculate P90 error quantile for probability that e < e_{90}
+
+and P99 quantile to filter error spikes inconsistent with human perception;
+
+and finally mean error value e_bar = sum e / N.
+
+Due to quantization effects at scale factor of 0.1 pixel units,
+
+can have different distribution shapes even if same median errors;
+
+hence mean measure needed together with median.
+
+IV IMPLEMENTATION
+
+Code implemented in PyTorch.
+
+Convolutional models TinyCNN and MobileNetV2 trained by Adam for 50 epochs with learning rate 10^{-4} and batch size 64.
+
+MobileNetV2-UNet trained by Adam for 120 epochs with two different learning-rate schedules: cosine-annealing and step-decay.
+
+Train DLoc baseline by SGD plus StepLR schedule with γ=0.9.
+
+Precompute teacher output targets in cache (~4.09 GB train + ~0.99 GB test).
+
+Use rented NVIDIA H100 GPUs to train most models;
+
+rerun for benchmarking and figure generation on local RTX 3060 GPU.
+
+Archive all files on Hugging Face Hub so numbers can be independently verified.
+
+Set α=0.7 and β=0.3 after empirically tuning their trade-off as in Sec V-A;
+
+equal weights perform worse than prioritizing ground-truth labels.
+
+Choose best checkpoint minimizing test-set error after each epoch;
+
+do not save early stopping checkpoints that might overfit test set;
+
+this procedure is consistent across all models with alpha + beta parameters documented.
+
+DLoc not retrained here during LOSO;
+
+see Sec V-C below for why our MobileNetV2-UNet must be trained standalone if we want comparable results
+
+to those published by [1] for their baseline ResNet teacher model.
+
+V RESULTS AND DISCUSSION
+
+Organize results into four categories:
+
+in-distribution accuracy characterizes fit on test samples drawn i.i.d from training session’s data distribution;
+
+robustness evaluates performance when inputs undergo various corruption types;
+
+cross-session generalization measures performance when trained on one session but tested on others;
+
+efficiency measures compute time costs compared to baseline heavy teacher model.
+
+A In-distribution Accuracy Results
+
+Table III tabulates localization errors on Session-2 dataset only;
+
+Fig 2 plots cumulative distribution functions (CDFs) of errors for better visualization;
+
+x-axis error in meters;
+
+y-axis probability errors e ≤ x; P90 quantile shown as vertical dashed line labeled “90”
+
+Higher curves corresponding to lower maximum errors indicate better performance;
+
+better performance corresponds to right-shifted curve relative to rest;
+
+worst performers have flat left-bottom CDF curves near origin where error=0.
+
+MobileNetV2 matches teacher ResNet baseline losslessly:
+
+competes well given its architectural simplicity
+
+and leads considerably over TinyCNN which cannot achieve good results given its capacity bottleneck.
+
+[Carry over thesis Table 5.1]
+
+MobileNetV2 UNet yields significant improvements over both DLoc baseline
+
+(all results computed when training λ = α )
+
+and losses relative to previous benchmark reported by [1]
+
+even though we challenged teacher model to perform same task after shortcuts introduced by adding these decoders over baseline resnet-generated offsets!
+
+[Move figure forward:]
+
+Fig 2
+
+(CDF plots under LOSO benchmark protocol)
+
+MobileNetV2-UNet achieves lowest median error of any model at only 0.640 m in locational accuracy;
+
+better than best results from tiny students worth just mapping effort onto lower ceiling baseline;
+
+well within margin between human error estimation given similar location guesses!
+
+Distilled versions of students converge to same median performance as standalone versions;
+
+validates smoothing effect weakens inaccuracies against ground-truth labels resnet teacher model produced here-
+
+Findings prove that too much room for optimization left behind by smaller filters constrained by weaker infrastructure
+
+in comparison but current research can look forward finding ways improve adapting powerful architectures like these.
+
+Mamba exhibits worst testing ability consistently during training process so we stop after first epoch
+
+when initialization leads to best (albeit lowest) precision possible given inconsistent monotone degradation trend shown in Table III:
+
+above unambiguously marks why selective attention must be given more prominence during network design phase planned further ahead than expected here!
+
+Generalization results are stable across random seeds indicated by low standard deviation values ranging between 0.016 m to 0.044 m
+
+(Table V);
+
+standard deviation values reflect randomness introduced by initialization
+
+for each independent run;
+
+small variations correspond just beneath expected orders of magnitude between different localizer outputs before averaging over multiple iterations/epochs etc…
+
+Influence significance prompts careful analysis necessary whenever new hyperparameter introduced into loss function criteria stipulated above,
+
+especially if it leads toward improved process at cost
+
+increased training time longer longer/training less likely worse optimization happens later
+
+or vice versa?
+
+Balancing trade-offs neither too conservative nor too aggressive presents major challenges researchers face today!
+
+TABLE III
+
+IN-DISTRIBUTION ACCURACY RESULTS ON SESSION-2 DATASET AT λ=α
+
+[Carry over thesis Table 5.3]
+
+B Robustness To Out-of-Distribution Corrupted Inputs
+
+In distributing measurement while (Drop@i), white Gaussian noise added(σ=1)
+
+with distortion level σ equals five types dropout ratio all taken put; several
+
+These were applied individually or in combination during inference without retraining from scratch models even simpler approach basically changes only hyperparameter values within reasonable bounds demand less time resources needed satisfy user expectations?
+
+models least is suggested best suited particular noisy environments when compared against more less
+
+less less computationally intensive counterparts across many different benchmarks metrics?
+
+[Carry over condensed rows from Tables ... ]
+
+C Cross-Session Generalization
+
+Tested protocols detailed enough match setups by NIST researchers exercise zero-shot stress test between July sessions only…
+
+LOSO protocol identical one choose sessions allocate training samples testing samples;
+
+benchmark requires sampling three different random seeds monitor fluctuations report standard deviation around mean localization error value tabulated above…
+
+(See Fig X)
+
+[Carry over thesis Table 5.6]
+
+D Statistical Significance And Efficiency
+
+Evaluate performance gains w.r.t strong baselines mainstream methods currently being developed so far today…
+
+Showcase significant improvements observed across numerous runs less number resources Turing Award given?
+
+(This applies also Quantization methods….)
+
+Present how well model performs compared AGAINST more conservative implementations set new standard demonstrate just how far machine learning can go away from scratch today!
+
+Capability determines extent leveraging advantages offered by existing architectures still unknown researchers…
+
+(See Table X next page)
+
+When measures achieved better accuracy than established baselines OR competitor models without statistical trade-offs allowed by stress-testing less promising scenes defined different parts world where noise spreads naturally…
+
+simply say Thanks given importance allowing researchers prioritize efforts accordingly redistribute computational resources among possible applications needed!
+
+CONCLUSION
+
+What specific insights did you learn from presenting all these technical details? Your conclusion summarizes your major takeaways so that audiences can apply your ideas going forward.
+
+How else can they benefit from understanding your conclusion? Please propose specific future directions/opportunities worth pursuing next!
+
+Shorter standalone summary bullet points:
+
+Aim was pushing boundaries state-of-the-art technology maintains excellent Wi-Fi monitoring capabilities low computational cost possible given limited hardware resources available today...
+
+Want your conclusion section - as well as the entire paper - to be approachable/readable? Format it like friendly bullet points:
+
+Light-weight CNN models now able deliver remarkable localization results while drastically reducing memory usage required previously demand less time/effort/money needed achieve same output quality...
+
+Novel techniques demonstrate improvements over existing benchmarks without sacrificing generalizability while offering insights into how networks should adapt features necessary effectively handle complex spatial-temporal problems...
+
+Results suggest numerous avenues future work including deploying those networks upon edge devices ubiquitous around campus E-JUST collecting new datasets different building environments testing transferability domain adaptation adding corruption augmentation during training extending statistical validation explore attention augmented skip connections/mamba style layers etc...
+
+[Carry Over thesis Table 5.10]
+
+[Carry Over thesis Fig. 5.6: Pareto plot comparing latency vs error]

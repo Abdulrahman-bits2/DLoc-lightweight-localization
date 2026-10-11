@@ -1,0 +1,160 @@
+%% ====================================================================
+%%  Chapter 1 — Foundations: WiFi Localization and the CSI Signal
+%% ====================================================================
+\chapter{Foundations: WiFi Localization and the CSI Signal}
+\label{ch:foundations}
+
+Before any neural network appears, you need to understand the physical problem and the clever
+reframing that makes deep learning applicable to it. This chapter builds that foundation: why indoor
+localization is hard, what a WiFi signal actually measures, how that measurement becomes an
+``image,'' and why the whole problem is then solved as \emph{image-to-image translation}.
+
+\section{Why indoor localization, and why GPS fails indoors}
+\label{sec:found:gps}
+
+Many applications need to know \emph{where} something is inside a building: tracking assets in a
+warehouse, finding patients in a hospital, augmented reality, indoor robots, and location-aware
+services in malls or airports. Outdoors, GPS solves this to within a few meters. Indoors, it
+collapses.
+
+GPS works by timing signals from satellites in direct line of sight. Indoors, those signals are
+\emph{attenuated} (weakened) by walls and roofs and \emph{reflected} off surfaces, so a receiver sees
+a jumble of delayed copies rather than a clean direct path. The timing that GPS depends on is
+destroyed. Two decades of research therefore looked for indoor alternatives: WiFi, Bluetooth,
+ultra-wideband, and inertial sensors.
+
+\begin{keyidea}
+The same physics that breaks GPS indoors ---reflection and \emph{multipath}--- is exactly what an
+indoor WiFi system must learn to cope with. Our models do not avoid multipath; they learn to read
+through it.
+\end{keyidea}
+
+\section{The WiFi opportunity: access points and CSI}
+\label{sec:found:wifi}
+
+WiFi is the most studied indoor-localization technology for one practical reason: the infrastructure
+already exists. Almost every building is blanketed by WiFi access points (APs). And modern WiFi
+hardware, as a side effect of doing its real job (reliable communication), continuously measures
+something extremely useful for localization: \textbf{Channel State Information (CSI)}.
+
+When an AP communicates with a device, it must estimate how the wireless channel distorted the
+signal so it can undo that distortion. That per-channel estimate \emph{is} the CSI. Because the way a
+signal is distorted depends on the geometry between the device and the AP ---distance, angle, what it
+bounced off--- the CSI implicitly encodes \emph{where the device is}. Extracting that location is the
+whole game.
+
+\section{What CSI physically is}
+\label{sec:found:csi}
+
+WiFi uses \emph{orthogonal frequency-division multiplexing} (OFDM): instead of one carrier frequency,
+the signal is split across many narrow \textbf{subcarriers}. For each subcarrier (and each antenna on
+the AP), the hardware estimates a single complex number describing how that frequency was attenuated
+and phase-shifted by the channel. Stack those numbers up and you get the CSI matrix at AP~$i$:
+\[
+  H_i \in \mathbb{C}^{\,N_{\text{sub}} \times N_{\text{ant}}},
+\]
+with $N_{\text{sub}}$ subcarriers and $N_{\text{ant}}$ antennas. Each entry has an \emph{amplitude}
+(how much the signal weakened) and a \emph{phase} (how much it was delayed, modulo a wavelength).
+
+Two facts make CSI informative about location:
+\begin{itemize}[leftmargin=1.4em,nosep]
+  \item \textbf{Amplitude vs.\ distance.} Signal strength falls off with distance, so amplitude is a
+  (noisy) distance cue.
+  \item \textbf{Phase across antennas vs.\ angle.} A wavefront arriving at an angle hits the AP's
+  antennas at slightly different times, producing a predictable phase progression across the antenna
+  array. That progression encodes the \emph{angle of arrival}.
+\end{itemize}
+
+\section{From CSI to a per-AP heatmap: AoA and ToF}
+\label{sec:found:aoa}
+
+Raw complex CSI is not something you would feed a vision network directly. DLoc's pre-processing
+(done in MATLAB, ``stage 0'' of the pipeline) turns each AP's CSI into a 2D \textbf{Angle-of-Arrival
+/ Time-of-Flight (AoA--ToF) profile} and then projects it onto the physical floor grid. The result is
+a per-AP \emph{heatmap} over the room: bright where ``the signal looks like it came from here.''
+
+\begin{itemize}[leftmargin=1.4em,nosep]
+  \item \textbf{Angle of Arrival (AoA)} ---from the phase progression across antennas--- says
+  \emph{which direction} the signal came from.
+  \item \textbf{Time of Flight (ToF)} ---from the phase progression across subcarriers (frequencies)---
+  says \emph{how far} the signal travelled.
+\end{itemize}
+
+Combine direction and distance for one AP and you get a constraint on where the device is; combine
+the constraints from several APs and you can, in principle, pin down the location. For the Jacobs
+Hall environment used throughout the thesis there are $N_{\text{AP}}=4$ APs, and each heatmap is
+sampled on a $161 \times 361$ grid at $0.1$\,m per pixel ---i.e.\ a $16.1 \times 36.1$\,m floor.
+Stacking the four per-AP heatmaps gives a four-channel ``image'' of shape $[\,4,\,161,\,361\,]$.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  font=\small,
+  stage/.style={draw=accent,fill=accent!8,rounded corners,minimum height=1.05cm,
+    minimum width=2.5cm,align=center},
+  arr/.style={-{Stealth[length=2.4mm]},accent,thick}]
+\node[stage] (csi) {Raw CSI\\$H_i\in\mathbb{C}^{N_\text{sub}\times N_\text{ant}}$\\(4 APs)};
+\node[stage,right=0.9cm of csi] (prof) {AoA--ToF\\profiles\\(MATLAB)};
+\node[stage,right=0.9cm of prof] (img) {4-channel\\input image\\$[4,161,361]$};
+\node[stage,right=0.9cm of img,fill=accent2!12,draw=accent2!70!black] (net) {Neural\\network\\(translate)};
+\node[stage,right=0.9cm of net] (out) {Output\\heatmap\\$[1,161,361]$};
+\node[stage,below=0.7cm of out] (xy) {$\arg\max$\\$\Rightarrow (x,y)$};
+\draw[arr] (csi) -- (prof);
+\draw[arr] (prof) -- (img);
+\draw[arr] (img) -- (net);
+\draw[arr] (net) -- (out);
+\draw[arr] (out) -- (xy);
+\end{tikzpicture}
+\caption{The end-to-end pipeline. Physics and signal processing turn raw CSI into a four-channel
+``image'' (one channel per AP); the neural network translates that into a single-channel location
+heatmap; the brightest pixel, scaled by $0.1$\,m/pixel, is the predicted position.}
+\label{fig:found:pipeline}
+\end{figure}
+
+\section{The clock-offset problem}
+\label{sec:found:offset}
+
+There is a crucial wrinkle. ToF is a \emph{timing} measurement, and the device's clock is not
+synchronized with the AP's clock. An unknown clock offset adds an unknown delay to every ToF, which
+shifts each AP's heatmap \emph{radially} ---the apparent location can move by $10$--$15$\,m. Worse,
+each AP has its own offset, so the four per-AP heatmaps do \emph{not} agree on a single point. The
+preprocessing therefore produces two versions of the per-AP heatmaps:
+\begin{itemize}[leftmargin=1.4em,nosep]
+  \item \code{features\_w\_offset}: \emph{with} the offset present ---this is the network input
+  (it is all you would have at deployment);
+  \item \code{features\_wo\_offset}: with the offset removed using extra information available only at
+  training time ---this is a \emph{training target} that teaches the network to undo the offset.
+\end{itemize}
+This is the single most important reason a \emph{learned} system beats classical geometry here:
+resolving the offset and reconciling four disagreeing APs is exactly what the network learns to do
+(the DLoc ``consistency decoder''; see Ch.~\ref{ch:arch} and \code{docs/01}).
+
+\section{Localization as image-to-image translation}
+\label{sec:found:translation}
+
+Now the reframing that makes everything click. Instead of computing the location with geometry, DLoc
+treats the four-channel CSI image as the \emph{input} of an \textbf{image-to-image translation}
+problem ---the same family of problems as ``turn this sketch into a photo''--- and learns a network
+that outputs a clean, single-channel heatmap. The target heatmap is a 2D \emph{Gaussian bump}
+centered on the true location (\code{labels\_gaussian\_2d}, shape $[1,161,361]$). At test time the
+prediction is read off as the \textbf{argmax} of the output heatmap, scaled by $0.1$\,m/pixel; the
+error is the Euclidean distance from that pixel to the true one (formalized in Ch.~\ref{ch:eval}).
+
+\begin{keyidea}
+Three reframings turn a hard physics problem into a tractable learning problem: (1) represent each
+AP's signal as a \emph{spatial heatmap} over the floor; (2) make the network's job \emph{translate
+input heatmaps into one output heatmap}; (3) read the location off as the \emph{peak}. Every model in
+this thesis ---except Mamba--- accepts this image framing, which is precisely why Mamba struggles
+(Ch.~\ref{ch:arch}).
+\end{keyidea}
+
+\section{Why deep learning instead of classical geometry}
+\label{sec:found:why_dl}
+
+Classical methods (e.g.\ SpotFi) estimate AoA and ToF analytically and intersect them. They work in
+clean, line-of-sight conditions but degrade badly under \emph{non-line-of-sight} (NLOS) and rich
+indoor multipath, where the strongest path is often a reflection, not the direct one. A learned
+network can instead exploit statistical regularities across the four APs and across the training
+environment: it can pick the direct path by cross-checking APs, sharpen blurry profiles, and undo
+the clock offset. The price for this capability is model size ---and shrinking that price, without
+losing the capability, is the subject of the rest of this guide.
