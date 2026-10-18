@@ -1,0 +1,328 @@
+% =====================================================================
+%  DLoc Lightweight Localization — COMPLETE PROJECT GUIDE
+%  The one reference: recreate the full environment & folder, the GitHub
+%  workflow, running experiments, and the NILES paper + slides.
+%  Compile with Tectonic ( tectonic Team_Setup_Guide.tex ) or pdfLaTeX.
+% =====================================================================
+\documentclass[11pt]{article}
+
+\usepackage[a4paper,margin=0.95in]{geometry}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{parskip}
+\usepackage[hidelinks]{hyperref}
+
+\definecolor{cmdbg}{gray}{0.95}
+\lstdefinestyle{sh}{
+  basicstyle=\ttfamily\footnotesize, backgroundcolor=\color{cmdbg},
+  frame=single, framerule=0pt, rulecolor=\color{cmdbg},
+  breaklines=true, columns=fullflexible, keepspaces=true,
+  xleftmargin=6pt, xrightmargin=2pt, aboveskip=7pt, belowskip=7pt,
+  showstringspaces=false, literate={~}{{\textasciitilde}}1,
+}
+\lstset{style=sh}
+\setlength{\emergencystretch}{3em}\sloppy
+\newcommand{\code}[1]{\lstinline[basicstyle=\ttfamily]|#1|}
+
+\title{\textbf{DLoc Lightweight WiFi Localization}\\[2pt]
+\large Complete Project Guide --- environment, GitHub, experiments, and the NILES paper/slides}
+\author{E-JUST graduation project}
+\date{\today}
+
+\begin{document}
+\maketitle
+\vspace{-1.1em}\hrule\vspace{1em}
+
+This is the single reference for the whole project. By the end you will have an
+\textbf{exact copy of the working folder} --- the code, the $\sim$70\,GB WILD dataset,
+the trained model weights, the shared Claude ``memory'', and all of the paper/thesis/
+slide sources for NILES. Everything you need to present and to continue the work.
+
+Follow the steps \textbf{in order}. You already have all the access (GitHub write +
+the HuggingFace org); you only have to pull everything down. Budget $\sim$30--60\,min,
+mostly the dataset download.
+
+% =====================================================================
+\section{Where everything lives}
+% =====================================================================
+The project is split across a code repo (small, in git) and HuggingFace (the big
+files). A \texttt{git clone} gives you the code and \emph{all the writing/slides};
+you pull the dataset and weights from HuggingFace.
+\begin{itemize}[leftmargin=1.4em,itemsep=3pt]
+\item \textbf{GitHub} --- \texttt{Abdulrahman-bits2/DLoc-lightweight-localization}:
+      code, paper, thesis, slides, figures, reports. \emph{You have write access.}
+\item \textbf{HF} \texttt{JustAGeek/dloc-wild-fig10b}: the WILD dataset ($\sim$70\,GB). Public.
+\item \textbf{HF} \texttt{JustAGeek/dloc-code}: trained weights, logs, results. Public.
+\item \textbf{HF} \texttt{Graduation-project123/dloc-private}: the Claude project
+      memory. Private --- reached through your org membership (\texttt{Ahmed-Emad-Haggag}).
+\end{itemize}
+
+% =====================================================================
+\section{Prerequisites (install once)}
+% =====================================================================
+\begin{itemize}[nosep,leftmargin=1.4em]
+\item \textbf{git}, \textbf{Python 3.9+} (3.10--3.13 fine) with \texttt{pip}.
+\item Your \textbf{HuggingFace account} \texttt{Ahmed-Emad-Haggag} (already in the org).
+\item A \textbf{GPU + CUDA} \emph{only to train}. To read code, reproduce the published
+      numbers from the downloaded weights, build the paper, or present --- no GPU needed.
+\item To \textbf{edit/compile the paper} locally: a LaTeX install (TeX Live / MiKTeX)
+      or just use \href{https://overleaf.com}{Overleaf} (Section~8). To open the
+      \textbf{slides}: Microsoft PowerPoint.
+\end{itemize}
+
+% =====================================================================
+\section{Get the full environment \& folder --- the easy way}
+% =====================================================================
+Four steps. The repo ships \texttt{setup.sh} that does the rest.
+
+\textbf{Step 1 --- log in to HuggingFace} (needed for the private memory repo):
+\begin{lstlisting}
+pip install -U "huggingface_hub[cli]"
+hf auth login        # paste a token from huggingface.co/settings/tokens (Read is enough)
+hf auth whoami       # should print: Ahmed-Emad-Haggag
+\end{lstlisting}
+
+\textbf{Step 2 --- clone the code:}
+\begin{lstlisting}
+git clone https://github.com/Abdulrahman-bits2/DLoc-lightweight-localization.git
+cd DLoc-lightweight-localization
+\end{lstlisting}
+
+\textbf{Step 3 --- run the setup script:}
+\begin{lstlisting}
+bash setup.sh                 # asks before the ~70 GB dataset download
+#   bash setup.sh --all -y    # everything, no questions (includes the dataset)
+#   bash setup.sh --no-dataset # skip the dataset (code + weights + memory only)
+#   bash setup.sh --with-teacher  # also regenerate teacher outputs (needs a GPU)
+\end{lstlisting}
+It makes a virtual environment, installs dependencies, and downloads the dataset,
+weights, and memory, then creates the cross-session symlinks.
+
+\textbf{Step 4 --- check it worked:}
+\begin{lstlisting}
+ls code/data code/weights claude-memory
+\end{lstlisting}
+You should see the \texttt{.mat} dataset files, 10 \texttt{.pth} weights, and 20 memory
+\texttt{.md} files. That is the full folder --- same as the original.
+
+% =====================================================================
+\section{Get the environment --- the manual way (alternative)}
+% =====================================================================
+Same result, by hand, from the cloned folder:
+\begin{lstlisting}
+python -m venv .venv
+source .venv/bin/activate              # Windows: .venv\Scripts\activate
+pip install -r code/requirements.txt
+
+cd code
+hf download JustAGeek/dloc-wild-fig10b --repo-type dataset --local-dir data   # ~70 GB
+hf download JustAGeek/dloc-code --include "weights/*" --local-dir .           # weights/
+cd ..
+hf download Graduation-project123/dloc-private --repo-type dataset --local-dir .  # claude-memory/
+
+# cross-session symlinks (only needed for the LOSO runs):
+cd code/data
+ln -s dataset_jacobs_Aug16_1.mat     dataset_train_jacobs_Aug16_1.mat
+ln -s dataset_jacobs_Aug16_3.mat     dataset_train_jacobs_Aug16_3.mat
+ln -s dataset_jacobs_Aug16_4_ref.mat dataset_train_jacobs_Aug16_4_ref.mat
+cd ../..
+\end{lstlisting}
+The Mamba model only, if you ever run it, needs two extra CUDA-only packages:
+\code{pip install mamba-ssm --no-deps} then \code{pip install causal-conv1d}.
+
+% =====================================================================
+\section{GitHub workflow (how we collaborate on the code)}
+% =====================================================================
+When you cloned from GitHub, your \texttt{origin} remote \emph{is} the GitHub repo, so
+the normal workflow just works. \textbf{Always pull before you start}, and \textbf{work
+on a branch}, not directly on \texttt{main}.
+\begin{lstlisting}
+git pull                                   # get everyone's latest changes first
+
+git checkout -b ahmed/my-change            # start your own branch
+#   ... edit files ...
+git add -A
+git commit -m "short description of what I changed"
+git push -u origin ahmed/my-change         # pushes to GitHub (origin = GitHub)
+# then open a Pull Request on GitHub to merge your branch into main
+\end{lstlisting}
+Useful:
+\begin{lstlisting}
+git status                 # what changed
+git log --oneline -10      # recent history
+git checkout main && git pull   # back to main and update
+\end{lstlisting}
+\textbf{Rules:}
+\begin{itemize}[nosep,leftmargin=1.4em]
+\item \textbf{Treat HuggingFace as download-only} --- use \code{hf download}, never
+      \texttt{git push} to a HuggingFace remote. The HF repos hold the only copies of
+      the weights/dataset/memory; a force-push can destroy them.
+\item \textbf{Don't commit big files} (datasets, \texttt{.pth}/\texttt{.pt}, logs, run
+      folders). They are git-ignored on purpose --- they live on HuggingFace.
+\end{itemize}
+
+% =====================================================================
+\section{The project memory + your own Claude}
+% =====================================================================
+\texttt{claude-memory/} is the project's full history --- every run, data split, result,
+decision, and the paper/slide status (20 notes, indexed by \texttt{MEMORY.md}). To pick
+up exactly where things are:
+\begin{enumerate}[nosep,leftmargin=1.5em]
+\item Open \textbf{Claude Code} (your own account) \emph{inside} the project folder.
+\item Tell it: \emph{``Read \texttt{claude-memory/MEMORY.md} and the files it indexes ---
+      that is this project's full context.''}
+\item Claude now knows the whole project (including all the NILES/paper decisions).
+\end{enumerate}
+
+% =====================================================================
+\section{Running experiments}
+% =====================================================================
+Run everything from the \texttt{code/} folder with the venv active.
+\begin{lstlisting}
+cd code
+source ../.venv/bin/activate              # Windows: ..\.venv\Scripts\activate
+
+# --- verify the PUBLISHED results WITHOUT a GPU (uses the downloaded weights) ---
+python evaluation/benchmark_models.py      # efficiency table (needs no data)
+python evaluation/test_robustness.py       # set MODEL_TYPE + WEIGHTS_PATH at top of file
+python evaluation/eval_cross_session.py     # set MODEL_TYPE + WEIGHTS_PATH at top of file
+
+# --- retrain from scratch (needs a GPU) ---
+python training/precompute_teacher.py       # once, before any DISTILLED run
+python training/train_distillation.py        # students: edit STUDENT_TYPE / MODE at top
+python training/train_unet_advanced.py        # U-Net:  edit SCHEDULER_TYPE / MODE at top
+bash    training/run_crosssession_table1.sh    # LOSO: 3 folds x 3 seeds
+\end{lstlisting}
+The weight files to use for each model are listed in \texttt{REPRODUCIBILITY.md}
+(the \texttt{MODEL\_TYPE}/\texttt{WEIGHTS\_PATH} table). Every data split and every run
+is documented in \texttt{Experiments\_and\_Data\_Splits.pdf}.
+
+% =====================================================================
+\section{The NILES paper \& slides (for your presentation)}
+% =====================================================================
+Everything for the talk is already in the repo (you got it with \texttt{git clone}).
+
+\textbf{The slides.} Open in PowerPoint:
+\begin{lstlisting}
+NilesConf/WiFi_Localization_NILES_v6.pptx
+\end{lstlisting}
+This is the final 38-slide deck (backup slides merged in, all numbers checked).
+
+\textbf{The paper (camera-ready).} The compiled PDF is ready to read:
+\begin{lstlisting}
+NilesConf/camera_ready_latex/main.pdf       # the camera-ready paper (read this)
+NilesConf/camera_ready_latex/main.tex       # its LaTeX source (+ references.bib, figures/)
+NilesConf/submission/main.tex               # same paper, the submission source
+\end{lstlisting}
+To \textbf{edit \& recompile} the paper, two options:
+\begin{itemize}[nosep,leftmargin=1.4em]
+\item \textbf{Overleaf (easiest):} new project $\rightarrow$ \emph{Upload} all files from
+      \texttt{NilesConf/camera\_ready\_latex/} $\rightarrow$ compile. It is self-contained
+      (includes \texttt{IEEEtran.cls}, \texttt{references.bib}, \texttt{figures/}).
+\item \textbf{Locally} (from inside that folder):
+\begin{lstlisting}
+cd NilesConf/camera_ready_latex
+# with Tectonic (one command, handles the bibliography):
+tectonic main.tex
+# or with a standard TeX Live / MiKTeX install:
+pdflatex main && bibtex main && pdflatex main && pdflatex main
+\end{lstlisting}
+\end{itemize}
+
+\textbf{Figures \& numbers} (useful while presenting):
+\begin{itemize}[nosep,leftmargin=1.4em]
+\item \texttt{Figures/generated/} --- all publication figures (CDFs, heatmaps, compression).
+\item \texttt{Experiments\_and\_Data\_Splits.pdf} --- every data split and H100 run, precisely.
+\item \texttt{reports/phase2\_results.tex} + \texttt{reports/CROSSSESSION\_FINAL\_REPORT.md}
+      --- the canonical result tables (medians/P90/P99, LOSO vs DLoc).
+\end{itemize}
+
+\textbf{Also in the repo:} \texttt{NilesConf/journal\_paper/} (extended journal version,
+\texttt{Journal\_paper.pdf}), \texttt{thesis/} (full thesis + \texttt{Final\_Thesis.pdf}),
+\texttt{presentation/} (an HTML defense-deck variant), \texttt{guide/} (study guide).
+
+% =====================================================================
+\section{What the folder looks like (reference)}
+% =====================================================================
+After setup, the folder matches the original:
+\begin{lstlisting}
+DLoc-lightweight-localization/
+  setup.sh                         one-shot environment setup
+  ONBOARDING.md  REPRODUCIBILITY.md    guides (result -> command map)
+  Team_Setup_Guide.pdf             <- this guide
+  Experiments_and_Data_Splits.pdf  every data split + H100 run
+  code/
+    core/ models/ training/ evaluation/ configs/ figures/   source
+    data/           WILD dataset .mat files        (from HF, after setup)
+    weights/        10 trained .pth checkpoints     (from HF, after setup)
+    results_crosssession/   final LOSO result JSONs
+    requirements.txt
+  claude-memory/                   the Claude project memory (from HF, private)
+  data_split_idx/                  the 10 original split-index .mat files
+  Figures/        generated/ (figures)  figure_data/ (per-sample arrays)
+  reports/                         LaTeX/Markdown result reports
+  NilesConf/
+    WiFi_Localization_NILES_v6.pptx   <- the NILES slides
+    camera_ready_latex/   main.tex  main.pdf  references.bib  figures/   <- the paper
+    submission/           main.tex (camera-ready source)
+    journal_paper/        extended journal version (Journal_paper.pdf)
+    NILES2026-CFP.pdf     the call-for-papers
+  thesis/  paper/  guide/  presentation/     writing artifacts
+  .venv/                           Python environment (after setup)
+\end{lstlisting}
+
+% =====================================================================
+\section{Troubleshooting}
+% =====================================================================
+\begin{description}[leftmargin=0pt,style=unboxed,itemsep=3pt]
+\item[\texttt{hf: command not found}] \code{pip install -U "huggingface_hub[cli]"} and
+      make sure the venv is active.
+\item[Private memory ``403''/``not found''] \code{hf auth whoami} must print
+      \texttt{Ahmed-Emad-Haggag}, and you must be in the \texttt{Graduation-project123}
+      org (you are).
+\item[Dataset download interrupted] Re-run it --- \code{hf download} resumes. Skip it
+      with \code{bash setup.sh --no-dataset}.
+\item[LOSO error about \texttt{dataset\_train\_jacobs\_Aug16\_*}] The symlinks are
+      missing (Section~5); \texttt{setup.sh} makes them. On Windows, enable Developer
+      Mode or use \texttt{mklink}.
+\item[\texttt{git push} goes to the wrong place] From a GitHub clone, \texttt{origin}
+      is GitHub --- that is correct. Never add or push to a HuggingFace git remote.
+\item[Windows] Activate the venv with
+      \texttt{.venv\textbackslash Scripts\textbackslash activate}; symlinks need
+      Developer Mode. The shared GPU workstation is Linux, where all commands work as written.
+\end{description}
+
+% =====================================================================
+\section*{Appendix --- command cheat-sheet}
+% =====================================================================
+\addcontentsline{toc}{section}{Appendix --- command cheat-sheet}
+\begin{lstlisting}
+# ---- one-time full setup -------------------------------------------
+pip install -U "huggingface_hub[cli]" && hf auth login
+git clone https://github.com/Abdulrahman-bits2/DLoc-lightweight-localization.git
+cd DLoc-lightweight-localization && bash setup.sh --all -y
+
+# ---- daily git ------------------------------------------------------
+git pull
+git checkout -b ahmed/my-change
+git add -A && git commit -m "..." && git push -u origin ahmed/my-change
+
+# ---- run (from code/, venv active) ---------------------------------
+cd code && source ../.venv/bin/activate
+python evaluation/benchmark_models.py
+python evaluation/eval_cross_session.py        # set MODEL_TYPE + WEIGHTS_PATH
+
+# ---- build the paper ------------------------------------------------
+cd NilesConf/camera_ready_latex && tectonic main.tex     # or upload the folder to Overleaf
+
+# ---- open the slides ------------------------------------------------
+# NilesConf/WiFi_Localization_NILES_v6.pptx   (PowerPoint)
+\end{lstlisting}
+
+\vspace{0.6em}\hrule\vspace{0.5em}
+Questions? Ping the team, or open the project in Claude Code and point it at
+\texttt{claude-memory/MEMORY.md}. Good luck with the NILES talk!
+
+\end{document}
