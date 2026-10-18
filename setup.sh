@@ -6,7 +6,7 @@
 #    * code             -> GitHub  (this repo)
 #    * dataset (~70 GB) -> HF  JustAGeek/dloc-wild-fig10b   (dataset)
 #    * trained weights  -> HF  JustAGeek/dloc-code          (model)
-#    * project memory   -> HF  JustAGeek/dloc-private       (PRIVATE, needs access)
+#    * project memory   -> HF  Graduation-project123/dloc-private  (PRIVATE org repo)
 #
 #  Resulting layout (everything runs from  code/ ):
 #    DLoc-lightweight-localization/
@@ -34,7 +34,7 @@ REPO_URL="https://github.com/Abdulrahman-bits2/DLoc-lightweight-localization.git
 REPO_DIR="DLoc-lightweight-localization"
 HF_DATASET="JustAGeek/dloc-wild-fig10b"   # dataset repo (the .mat files)
 HF_WEIGHTS="JustAGeek/dloc-code"          # model repo   (weights/, logs/, results/)
-HF_PRIVATE="JustAGeek/dloc-private"       # PRIVATE repo (claude-memory/)
+HF_PRIVATE="Graduation-project123/dloc-private"  # PRIVATE org repo (claude-memory/)
 
 # ---- options ---------------------------------------------------------
 WANT_DATASET="prompt"; WANT_WEIGHTS=1; WANT_MEMORY=1; WANT_TEACHER=0; ASSUME_YES=0
@@ -132,11 +132,11 @@ if [ "$WANT_MEMORY" = 1 ]; then
     if hf_dl "$HF_PRIVATE" dataset . ; then
       ok "memory in claude-memory/ (open your Claude account here; tell it to read claude-memory/MEMORY.md)"
     else
-      warn "memory download failed — ask the owner to add you as a collaborator on $HF_PRIVATE"
+      warn "memory download failed — ask the owner to add you to the Graduation-project123 org"
     fi
   else
-    warn "not logged in to Hugging Face. Run  'hf auth login'  (you must be a collaborator on the"
-    warn "private repo), then:  hf download $HF_PRIVATE --repo-type dataset --local-dir ."
+    warn "not logged in to Hugging Face. Run  'hf auth login'  (you must be a member of the"
+    warn "Graduation-project123 org), then:  hf download $HF_PRIVATE --repo-type dataset --local-dir ."
   fi
 else
   warn "skipped memory"
