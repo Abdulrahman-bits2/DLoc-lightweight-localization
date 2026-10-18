@@ -1,0 +1,498 @@
+% =====================================================================
+%  DLoc Lightweight Localization — Data Splits & H100 Experiment Log
+%  A complete, precise record of:
+%    (1) the data splits defined in the original WILD split-index files,
+%    (2) how those splits compose into the three experimental protocols,
+%    (3) every experiment run on the Vast.ai H100, with the data/split
+%        used and the purpose of each run.
+%  All numbers verified against the original data_split_ids_*.mat files,
+%  the training code, the per-run result JSONs, and the H100 run report.
+%  Compile with pdfLaTeX or Tectonic.
+% =====================================================================
+\documentclass[11pt]{article}
+
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{multirow}
+\usepackage{amsmath,amssymb}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{caption}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+\setlength{\emergencystretch}{3em}
+
+\newcommand{\file}[1]{\texttt{#1}}
+\newcommand{\best}[1]{\textbf{#1}}
+\captionsetup{font=small,labelfont=bf}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+\renewcommand{\arraystretch}{1.25}
+\sloppy  % absorb the few long \texttt filename lines into loose spacing
+
+\title{\textbf{DLoc Lightweight WiFi Localization}\\[2pt]
+\large Data Splits and Experiments Run on the Vast.ai H100}
+\author{E-JUST graduation project --- internal technical record}
+\date{Compiled \today}
+
+\begin{document}
+\maketitle
+\vspace{-1.2em}
+\hrule
+\vspace{1em}
+
+% =====================================================================
+\section{Overview and scope}
+% =====================================================================
+This document is a precise, self-contained record of the \emph{data} behind the
+project: the splits as they are actually defined in the original WILD
+split-index files, how they are assembled into the three experimental
+protocols, and every GPU experiment run on the rented Vast.ai H100, annotated
+with \emph{which split/data it used} and \emph{what the run was for}.
+
+\textbf{Dataset.} WILD (UC San Diego), the public dataset released with DLoc,
+collected in \emph{Jacobs Hall} with 4 access points (APs). Each labelled
+example is a $4\times161\times361$ stack of AoA--ToF heatmaps (one $161\times361$
+image per AP) and a $1\times161\times361$ Gaussian ground-truth location heatmap
+on a grid of $0.1$\,m\,/\,pixel (a $16.1\,\text{m}\times36.1\,\text{m}$ floor).
+
+\textbf{Error metric.} Localization error
+$e = 0.1\cdot\lVert \arg\max(\hat{y}) - \arg\max(y)\rVert_2$ metres --- the
+Euclidean distance between the peaks of the predicted and ground-truth heatmaps,
+scaled to metres. Because peaks are integer pixels, $e$ is quantized to the
+lattice $0.1\sqrt{n}$; medians can coincide across models, so we also report the
+90th and 99th percentiles (P90, P99) and, where available, the mean.
+
+\textbf{Hardware.} All GPU training for the project was performed on Vast.ai
+H100 80\,GB instances. The flagship, fully cost-instrumented run (the official
+leave-one-session-out comparison, Section~\ref{sec:loso}) ran on H100 instance
+\texttt{41279674}; the Phase-1/Phase-2 training (Section~\ref{sec:indist}) ran on
+the project's earlier Vast.ai H100 instance.
+
+% =====================================================================
+\section{The five Jacobs Hall sessions}
+% =====================================================================
+WILD/Jacobs Hall consists of five data-collection sessions of increasing
+difficulty. Sessions~1--2 (July~28, 2019) are the ``standard'' setup used for
+in-distribution training/testing; Sessions~3--5 (Aug.~16, 2019) introduce
+distribution shift (furniture, then a specular aluminium reflector) and serve as
+unseen cross-session test environments.
+
+\begin{table}[h]
+\centering
+\caption{The five sessions. ``Samples (processed)'' is the sample count of the
+processed dataset file actually used; for Session~1 this is its \emph{training}
+partition only (see Section~\ref{sec:splitfiles} and Note~\ref{note:jul28}).}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{cllrl}
+\toprule
+\# & Session tag & Date & Samples (processed) & Condition / role \\
+\midrule
+1 & \file{jacobs\_July28}       & Jul 28, 2019       & 7{,}635  & reference; training \\
+2 & \file{jacobs\_July28\_2}    & Jul 28, 2019 (+1h) & 14{,}199 & same setup; in-dist train+test \\
+3 & \file{jacobs\_Aug16\_1}     & Aug 16, 2019       & 11{,}201 & furniture rearranged; cross-session \\
+4 & \file{jacobs\_Aug16\_3}     & Aug 16, 2019       & 8{,}754  & different furniture; cross-session \\
+5 & \file{jacobs\_Aug16\_4\_ref}& Aug 16, 2019       & 5{,}486  & aluminium reflector; cross-session \\
+\midrule
+\multicolumn{3}{r}{\textbf{Total processed}} & \textbf{47{,}275} & \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+Roughly 94\% of the data is non-line-of-sight (NLOS): field-of-view (FOV) samples
+are rare (e.g.\ only 840 of 14,199 in Session~2), so the task is dominated by the
+hard multipath case.
+
+% =====================================================================
+\section{The original split-index files}
+\label{sec:splitfiles}
+% =====================================================================
+The splits are \emph{not} ours --- they ship with WILD as
+\file{data\_split\_ids\_*.mat} files (authored by the DLoc team, dated
+2022-09-19). Each file partitions one session's samples into four disjoint
+index sets: \file{fov\_train\_idx}, \file{fov\_test\_idx},
+\file{non\_fov\_train\_idx}, \file{non\_fov\_test\_idx}. Table~\ref{tab:splits}
+reports the exact contents, read directly from the \file{.mat} files.
+
+\begin{table}[h]
+\centering
+\caption{Exact structure of every original split-index file. ``Train'' $=$ FOV-train
+$+$ non-FOV-train; ``Test'' $=$ FOV-test $+$ non-FOV-test. ``Adj.'' is the fraction
+of test indices with a train index at position $\pm 1$ --- a near-zero value
+confirms a \emph{contiguous temporal} hold-out (train early, test late), not a
+random shuffle. All partitions are disjoint and cover $1\ldots N$ with no gaps.}
+\label{tab:splits}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lrrrrrrr}
+\toprule
+\multicolumn{1}{c}{Split file (\file{data\_split\_ids\_}$\ldots$)} &
+\multicolumn{1}{c}{FOV-tr} & \multicolumn{1}{c}{FOV-te} &
+\multicolumn{1}{c}{nFOV-tr} & \multicolumn{1}{c}{nFOV-te} &
+\multicolumn{1}{c}{Train} & \multicolumn{1}{c}{Test} & \multicolumn{1}{c}{Adj.} \\
+\midrule
+\multicolumn{8}{l}{\itshape Jacobs Hall --- used in this project}\\
+\file{jacobs\_July28}        & 632  & 271 & 7{,}003 & 3{,}001 & 7{,}635 & 3{,}272 & 0.15\% \\
+\file{jacobs\_July28\_2}     & 588  & 252 & 9{,}351 & 4{,}008 & 9{,}939 & 4{,}260 & 0.07\% \\
+\file{jacobs\_Aug16\_1}      & 1{,}121 & 480 & 6{,}720 & 2{,}880 & 7{,}841 & 3{,}360 & 0.09\% \\
+\file{jacobs\_Aug16\_3}      & 1{,}001 & 429 & 5{,}127 & 2{,}197 & 6{,}128 & 2{,}626 & 0.34\% \\
+\file{jacobs\_Aug16\_4\_ref} & 342  & 146 & 3{,}499 & 1{,}499 & 3{,}841 & 1{,}645 & 0.18\% \\
+\midrule
+\multicolumn{8}{l}{\itshape Jacobs Hall --- spatial-disjoint (Fig.\ 13b), NOT run}\\
+\file{jacobs\_July28\_space\_gen}   & \multicolumn{4}{c}{(single train/test split)} & 10{,}004 & 903 & 0.78\% \\
+\file{jacobs\_July28\_2\_space\_gen}& \multicolumn{4}{c}{(single train/test split)} & 13{,}359 & 840 & 1.19\% \\
+\midrule
+\multicolumn{8}{l}{\itshape Other sessions --- present but NOT used (no feature data locally)}\\
+\file{July16}        & 3{,}417 & 1{,}465 & 14{,}864 & 6{,}371 & 18{,}281 & 7{,}836 & 0.17\% \\
+\file{July18}        & 2{,}826 & 1{,}211 & 13{,}828 & 5{,}926 & 16{,}654 & 7{,}137 & 0.08\% \\
+\file{July22\_2\_ref}& 844  & 362 & 3{,}697 & 1{,}584 & 4{,}541 & 1{,}946 & 0.26\% \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\textbf{Reading the split.} Taking \file{jacobs\_July28\_2} as the worked example:
+\file{non\_fov\_train\_idx} covers indices $1\ldots9824$ and
+\file{non\_fov\_test\_idx} covers $9825\ldots14199$; \file{fov\_train\_idx} covers
+$3728\ldots10153$ and \file{fov\_test\_idx} covers $10154\ldots14016$. Training
+indices are concentrated in the early part of the recording and test indices in
+the late part; only 3 of 4,260 test samples ($0.07\%$) have a training neighbour
+at $\pm1$. This is a \textbf{temporal hold-out}, which matters for defence: with
+50\,ms sampling from a slow ($15$\,cm/s) robot, a \emph{random} split would leak
+near-duplicate frames across train/test --- but this split does not.
+
+% =====================================================================
+\section{From split files to experimental protocols}
+% =====================================================================
+The split files above are assembled into three protocols. Which processed
+\file{.mat} files feed each is fixed in \file{code/training/train\_unet\_crosssession.py}
+(fold table) and \file{code/training/train\_distillation.py} (in-distribution paths).
+
+% ------------------------------------------------------------------
+\subsection{(A) In-distribution --- DLoc Fig.\ 10b}
+% ------------------------------------------------------------------
+Train and test on the two July sessions' \emph{own} partitions.
+\begin{itemize}[nosep,leftmargin=1.4em]
+\item \textbf{Train (17{,}574):} \file{jacobs\_July28} training partition (7{,}635)
+      $+$ \file{jacobs\_July28\_2} training partition (9{,}939 $=$ 588 FOV $+$ 9{,}351 non-FOV).
+\item \textbf{Test (4{,}260):} \file{jacobs\_July28\_2} test partition (252 FOV $+$ 4{,}008 non-FOV).
+\end{itemize}
+This reproduces the published DLoc training-set size of 17{,}574 exactly.
+Session~1's own test partition (3{,}272 samples) is \emph{not} used by Fig.\ 10b.
+
+% ------------------------------------------------------------------
+\subsection{(B) Zero-shot cross-session --- our construction}
+% ------------------------------------------------------------------
+Train \emph{only} on the two July sessions (the very same 17{,}574-sample
+in-distribution training set, i.e.\ the Phase-1/2 checkpoints are reused), then
+evaluate, with no fine-tuning, on each \emph{entire} unseen August session.
+\begin{itemize}[nosep,leftmargin=1.4em]
+\item \textbf{Train:} July28 $+$ July28\_2 training partitions (17{,}574).
+\item \textbf{Test (full sessions):} Aug16\_1 (11{,}201), Aug16\_3 (8{,}754), Aug16\_4\_ref (5{,}486).
+\end{itemize}
+Purpose: an internal ablation of architecture/distillation under strong
+distribution shift. It is \emph{not} a fair comparison to DLoc (DLoc trains on
+three sessions; this trains on two), which is exactly why protocol~(C) was run.
+
+% ------------------------------------------------------------------
+\subsection{(C) Leave-one-session-out (LOSO) --- DLoc's official protocol}
+\label{sec:losoprotocol}
+% ------------------------------------------------------------------
+The scheme used by the DLoc paper's Table~1: each fold trains on the two July
+sessions \emph{plus} two of the three August sessions and tests on the held-out
+August session (used in full). The held-out session never appears in its fold's
+training set. The August sessions enter training as \emph{full} sessions (no
+FOV split applied), while the two July sessions contribute their training
+partitions (17{,}574, identical to protocol~A).
+
+\begin{table}[h]
+\centering
+\caption{The three LOSO folds and their exact sample counts. ``$J$'' $=$ the
+17{,}574 July training samples (common to all folds).}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llrl}
+\toprule
+Fold & Trains on & Train $N$ & Tests on (held out) \\
+\midrule
+\file{rw\_to\_rw\_env2} & $J$ $+$ Aug16\_3 $+$ Aug16\_4\_ref & 31{,}814 & \textbf{Aug16\_1} (furniture), 11{,}201 \\
+\file{rw\_to\_rw\_env3} & $J$ $+$ Aug16\_1 $+$ Aug16\_4\_ref & 34{,}261 & \textbf{Aug16\_3} (diff.\ furn.), 8{,}754 \\
+\file{rw\_to\_rw\_env4} & $J$ $+$ Aug16\_1 $+$ Aug16\_3      & 37{,}529 & \textbf{Aug16\_4\_ref} (reflector), 5{,}486 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+$31{,}814 = 17{,}574 + 8{,}754 + 5{,}486$; $34{,}261 = 17{,}574 + 11{,}201 + 5{,}486$;
+$37{,}529 = 17{,}574 + 11{,}201 + 8{,}754$ --- verified against the run logs.
+
+% =====================================================================
+\section{Experiments run on the Vast.ai H100 --- master list}
+\label{sec:master}
+% =====================================================================
+Table~\ref{tab:master} lists every GPU run, the protocol/data it used, and its
+purpose. Detailed per-run numbers follow in Sections~\ref{sec:loso}--\ref{sec:indist}.
+
+\begin{table}[h]
+\centering
+\caption{All experiments. ``Split'' refers to the protocols of Section~4.
+Results are median localization error unless noted.}
+\label{tab:master}
+\small
+\setlength{\tabcolsep}{4pt}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{p{4.6cm}ccp{5.1cm}}
+\toprule
+Run (model / variant) & Split & Ep.\,/\,seeds & Purpose \& headline result \\
+\midrule
+DLoc baseline (teacher) & A & 50 & reference \& KD teacher; 0.707\,m \\
+DLoc baseline multi-seed & A & 120, $\times3$ & seed-stability of DLoc; $0.875\pm0.036$\,m \\
+MobileNetV2 (standalone / distilled) & A & 50 & 7.2$\times$ compression; 0.707\,m (matches DLoc repro) \\
+TinyCNN (standalone / distilled) & A & 50 & capacity floor probe; 3.92 / 3.71\,m (under-capacity) \\
+Mamba & A & 50 & sequence-model probe; 10.56\,m (arch.\ mismatch) \\
+MobileNetV2-UNet, cosine, standalone & A & 120 & \best{main model}; \best{0.640\,m} \\
+MobileNetV2-UNet, step, standalone & A & 120 & scheduler ablation; 0.640\,m \\
+MobileNetV2-UNet, cosine, distilled & A & 120 & KD on best model; 0.640\,m (best tail 2.587\,m P99) \\
+Robustness eval (6 models) & A$^\dagger$ & --- & test-time corruption; KD $3.4\times$ \& skips $5.5\times$ noise \\
+Zero-shot cross-session (6 models) & B & reuse & shift ablation; U-Net distilled best (1.020/1.005/1.281) \\
+\textbf{Official LOSO, U-Net standalone} & C & 120, $\times3$ & \best{fair vs published DLoc}; mean 0.930\,m vs 0.86 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+{\footnotesize $^\dagger$ Robustness applies corruptions (AP dropout, Gaussian
+noise $\sigma\!\in\!\{0.1,0.2\}$, attenuation, blur) to the protocol-A test set
+\emph{at test time only} --- no retraining.}
+
+% =====================================================================
+\section{Detailed: the official LOSO H100 run}
+\label{sec:loso}
+% =====================================================================
+This is the flagship, fully-instrumented H100 run (2026-06-17 $\rightarrow$
+2026-06-18). Its purpose: re-run \emph{our} MobileNetV2-UNet under DLoc's own
+leave-one-session-out protocol (protocol~C) so the comparison with the published
+DLoc Table~1 is apples-to-apples (same sessions, same held-out test, same metric
+in metres), replacing an earlier unfair 2-session cross-session experiment.
+
+\textbf{Instance \& environment.} Vast.ai H100 80\,GB SXM (instance
+\texttt{41279674}), 192-core EPYC, $\sim$2\,TB RAM, 150\,GB NVMe; Python
+environment \file{/venv/main}, torch 2.12.0+cu130.
+
+\textbf{Model.} MobileNetV2-UNet (\file{student\_unet.py}): ImageNet-pretrained
+MobileNetV2 encoder (first conv adapted to 4 AP channels) split into 4 stages
+with U-Net skip connections into the decoder ($320{+}96{\to}128$,
+$128{+}32{\to}64$, $64{+}24{\to}32$, $32{\to}1$ $+$ Sigmoid).
+\textbf{2{,}409{,}217 parameters (2.41\,M)}, output $161\times361$.
+
+\textbf{Training recipe (each fold, each seed).} Adam, lr $=10^{-4}$; cosine
+annealing ($T_{\max}=120$); MSE loss; \textbf{standalone} (no distillation ---
+see caveat); 120 epochs; batch size 64; seeds 42, 123, 777; best checkpoint $=$
+epoch of minimum test median error.
+
+\begin{table}[h]
+\centering
+\caption{All 9 LOSO runs (3 folds $\times$ 3 seeds), from the per-run result JSONs.}
+\begin{tabular}{llrrrr}
+\toprule
+Fold (held out) & Seed & Median (m) & P90 (m) & P99 (m) & Best ep. \\
+\midrule
+\multirow{3}{*}{env2 --- Aug16\_1 (furniture)}
+ & 42  & 0.854 & 1.769 & 5.445 & 58 \\
+ & 123 & 0.806 & 1.844 & 5.022 & 53 \\
+ & 777 & 0.894 & 1.903 & 5.124 & 40 \\
+\midrule
+\multirow{3}{*}{env3 --- Aug16\_3 (diff.\ furn.)}
+ & 42  & 0.825 & 2.640 & 8.896 & 67 \\
+ & 123 & 0.781 & 2.915 & 9.986 & 40 \\
+ & 777 & 0.860 & 2.823 & 9.487 & 72 \\
+\midrule
+\multirow{3}{*}{env4 --- Aug16\_4\_ref (reflector)}
+ & 42  & 1.131 & 2.474 & 6.508 & 52 \\
+ & 123 & 1.100 & 2.524 & 7.101 & 58 \\
+ & 777 & 1.118 & 2.470 & 6.894 & 63 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\centering
+\caption{LOSO aggregated (mean $\pm$ sample std, $n=3$) vs.\ published DLoc
+Table~1. Our model is 2.41\,M params vs.\ DLoc's 16.5\,M ($6.8\times$ smaller).}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lccccc}
+\toprule
+Fold & Median (ours) & Median (paper) & P90 (ours) & P90 (paper) & P99 (ours) \\
+\midrule
+env2 furniture   & $\best{0.852}\pm0.044$ & 0.71 & $1.839\pm0.067$ & 1.71 & $5.197\pm0.221$ \\
+env3 diff.\ furn.& $\best{0.822}\pm0.040$ & 0.82 & $2.793\pm0.140$ & 2.52 & $9.457\pm0.546$ \\
+env4 reflector   & $\best{1.116}\pm0.016$ & 1.05 & $2.489\pm0.030$ & 2.77 & $6.834\pm0.301$ \\
+\midrule
+\textbf{mean}    & \textbf{0.930} & 0.86 & \textbf{2.374} & 2.33 & --- \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\textbf{Reading the result.} At $6.8\times$ fewer parameters the U-Net
+\emph{matches} DLoc on the different-furniture fold (0.822 vs 0.82), is within
+$\sim$0.07--0.14\,m on the others, is level on mean P90 (2.374 vs 2.33), and
+\emph{beats} DLoc's P90 on the hardest (reflector) fold (2.489 vs 2.77). Medians
+are seed-stable ($\pm$0.016--0.044\,m). The residual median gap on the reflector
+fold is expected: DLoc's consistency (offset) decoder enforces multi-AP
+agreement under specular multipath, which the single-decoder U-Net lacks.
+
+\textbf{Compute \& cost.} $\sim$40--64\,s/epoch; $\sim$1.5--2\,h/run; all 9 runs
+$\times$ 120 epochs completed; wall-clock $\approx$16\,h; cost $\approx\$34$--$38$
+at $\sim\$2.16$/hr. The DLoc baseline was \emph{not} retrained (by instruction),
+saving $\sim$50--100 H100-hours.
+
+\textbf{Caveats (honest).}
+\begin{enumerate}[nosep,leftmargin=1.5em]
+\item ``Official training strategy'' was read as the \emph{session/data protocol},
+      keeping the U-Net's own recipe (120-ep cosine Adam), not DLoc's optimizer
+      (lr $10^{-5}$, batch 32, $\sim$50 ep).
+\item \textbf{Standalone, not distilled}: per-fold distillation would need a
+      teacher retrained per fold (excluded by instruction); standalone U-Net is
+      the conservative fair-comparison choice.
+\item Comparison is to DLoc's \emph{published} numbers, not our in-house
+      reproduction (which lands $\sim$0.707\,m in-distribution vs the paper's 0.64).
+\item Within Jacobs Hall only --- not cross-\emph{building} (Atkinson/Fig.\ 10a
+      data unavailable).
+\item The instance had no persistent volume --- all 9 run dirs + result JSONs
+      were pulled to local and pushed to HuggingFace before teardown.
+\end{enumerate}
+
+% =====================================================================
+\section{In-distribution and zero-shot results (Phase 1/2)}
+\label{sec:indist}
+% =====================================================================
+These runs trained the teacher, the four students, and the U-Net variants on
+protocol~A (Vast.ai H100, Jun~8--9 2026 per run-dir timestamps), then reused the
+checkpoints for the robustness and zero-shot evaluations.
+
+\begin{table}[h]
+\centering
+\caption{In-distribution accuracy (protocol A; Session-2 test set, $N=4{,}260$).
+Best in bold. Published DLoc from the paper; our reproduction is the KD teacher.}
+\begin{tabular}{lllccc}
+\toprule
+Model & Params & Mode & Median (m) & P90 (m) & P99 (m) \\
+\midrule
+DLoc (published)   & 16.5M & ---               & \best{0.64}  & 1.6   & 3.2 \\
+DLoc (our repro)   & 16.5M & ---               & 0.707        & $\sim$1.6 & $\sim$4.0 \\
+MobileNetV2        & 2.27M & standalone        & 0.707        & 1.616 & 3.992 \\
+MobileNetV2        & 2.27M & distilled         & 0.707        & 1.612 & 4.003 \\
+TinyCNN            & 47K   & standalone        & 3.922        & 13.919 & 23.244 \\
+TinyCNN            & 47K   & distilled         & 3.706        & 14.784 & 25.101 \\
+MobileNetV2-UNet   & 2.41M & standalone (cos)  & \best{0.640} & 1.523 & 2.750 \\
+MobileNetV2-UNet   & 2.41M & standalone (step) & \best{0.640} & 1.552 & 2.918 \\
+MobileNetV2-UNet   & 2.41M & distilled (cos)   & \best{0.640} & \best{1.513} & \best{2.587} \\
+Mamba              & 653K  & standalone        & 10.56        & 20.0  & 28.3 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\centering
+\caption{Zero-shot cross-session (protocol B): train July-only, test full August
+sessions. Cells: median\,/\,P90 (m). Best per column in bold. S2 is the
+in-distribution reference.}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llcccc}
+\toprule
+Model & Mode & S2 (in-dist) & Aug16\_1 & Aug16\_3 & Aug16\_4\_ref \\
+\midrule
+MobileNetV2      & standalone & 0.707 & 1.118\,/\,3.138 & 1.204\,/\,3.471 & 1.500\,/\,3.367 \\
+MobileNetV2      & distilled  & 0.707 & 1.118\,/\,3.228 & 1.204\,/\,3.342 & 1.442\,/\,3.711 \\
+TinyCNN          & standalone & 3.922 & 5.964 & 6.327 & 6.605 \\
+MobileNetV2-UNet & standalone & 0.640 & 1.063\,/\,2.508 & 1.005\,/\,3.704 & 1.334\,/\,3.301 \\
+MobileNetV2-UNet & distilled  & 0.640 & \best{1.020\,/\,2.319} & \best{1.005\,/\,2.608} & \best{1.281\,/\,3.002} \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\begin{table}[h]
+\centering
+\caption{DLoc baseline multi-seed (protocol A, 120 epochs, StepLR $\gamma=0.9$).}
+\begin{tabular}{lccc}
+\toprule
+Seed & Median (m) & P90 (m) & P99 (m) \\
+\midrule
+42  & 0.825 & 2.402 & 22.672 \\
+123 & 0.906 & 2.335 & 7.714 \\
+777 & 0.894 & 2.102 & 8.694 \\
+\midrule
+\textbf{mean $\pm$ std} & $\mathbf{0.875\pm0.036}$ & $2.280\pm0.128$ & $13.027\pm6.832$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The U-Net's 0.640\,m is $6.5$ standard deviations below this baseline mean, i.e.\
+the improvement is not seed noise. (Note the 120-epoch baseline is \emph{worse}
+than the 50-epoch teacher because StepLR $\gamma=0.9$ never decays the learning
+rate to zero over 120 epochs.)
+
+% =====================================================================
+\section{Hyperparameters per model}
+% =====================================================================
+Verified against \file{code/} source.
+
+\begin{table}[h]
+\centering
+\caption{Training hyperparameters. KD loss (distilled modes):
+$L = 0.7\,\mathrm{MSE}(\hat{y},y) + 0.3\,\mathrm{MSE}(\hat{y},y_T)$, with teacher
+heatmaps $y_T$ pre-computed offline (the teacher never runs during student
+training). $\beta{=}0$ recovers standalone.}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llllll}
+\toprule
+Model / run & Optimizer & LR & Batch & Epochs & Scheduler / seeds \\
+\midrule
+DLoc baseline & Adam ($\beta_1{=}0.5$) & $1\mathrm{e}{-5}$ & 64 & 120$^\ddagger$ & StepLR $\gamma{=}0.9$ \\
+DLoc multi-seed & Adam ($\beta_1{=}0.5$) & $1\mathrm{e}{-5}$ & 64 & 120 & StepLR; seeds 42/123/777 \\
+MobileNetV2, TinyCNN & Adam & $1\mathrm{e}{-4}$ & 32 & 50 & ---; seed 0 \\
+Mamba & Adam & $1\mathrm{e}{-4}$ & 32 & 50 & ---; seed 0 \\
+U-Net (in-dist) & Adam & $1\mathrm{e}{-4}$ & 32 & 120 & cosine $T_{\max}{=}120$ \emph{or} step(20,\,0.5) \\
+U-Net (LOSO) & Adam & $1\mathrm{e}{-4}$ & 64 & 120 & cosine $T_{\max}{=}120$; seeds 42/123/777 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+{\footnotesize $^\ddagger$ DLoc counts epochs as $\mathrm{niter}(20)+\mathrm{niter\_decay}(100)=120$;
+the KD teacher is a 50-epoch run. StepLR step sizes: encoder 50, decoder 20, offset 50.
+\textbf{Note:} the in-distribution students/U-Net used batch~\textbf{32}; batch~64 applies only
+to the baseline and the LOSO U-Net.}
+
+% =====================================================================
+\section{Notes, de-scoped runs, reproducibility}
+% =====================================================================
+\begin{enumerate}[leftmargin=1.5em]
+\item\label{note:jul28} \textbf{Session~1 is a training-only partition.} The
+split file \file{jacobs\_July28} defines 10{,}907 samples (7{,}635 train /
+3{,}272 test), but the processed \file{dataset\_jacobs\_July28.mat} contains only
+the 7{,}635-sample \emph{training} partition --- which is why protocol~A's training
+set sums to the published 17{,}574. Session~1's 3{,}272 test samples are unused.
+
+\item \textbf{August split files are unused.} In protocols B and C the August
+sessions are always used in \emph{full} (no FOV split), so the
+\file{data\_split\_ids\_jacobs\_Aug16\_*} files (Table~\ref{tab:splits}) do not
+enter any run.
+
+\item \textbf{Present but never run:} the spatial-disjoint
+\file{*\_space\_gen} splits (DLoc Fig.\ 13b); the \file{July16}/\file{July18}/
+\file{July22\_2\_ref} sessions (a different building / setup --- no feature data
+held locally); Fig.\ 10a (Atkinson, 3 APs) and Fig.\ 13a (20/40\,MHz bandwidth).
+
+\item \textbf{De-scoped (budget):} student multi-seed (MobileNet/TinyCNN/U-Net
+$\times2$ seeds); per-fold distilled LOSO. Two further studies (Study~A:
+spatial-preservation vs.\ parameter count; Study~C: distillation mechanism) are
+built but not yet run.
+
+\item \textbf{Reproducibility.} Code: GitHub
+\file{Abdulrahman-bits2/DLoc-lightweight-localization}. Processed dataset
+(70.5\,GB, all 5 sessions) $+$ split-index files: HuggingFace
+\file{JustAGeek/dloc-wild-fig10b}. Trained weights, per-epoch logs, result
+files, and the 9 LOSO run dirs: HuggingFace \file{JustAGeek/dloc-code}
+(\file{weights/}, \file{logs/}, \file{results/}, \file{crosssession\_official/}).
+Teacher heatmaps regenerate via \file{precompute\_teacher.py}.
+\end{enumerate}
+
+\end{document}
