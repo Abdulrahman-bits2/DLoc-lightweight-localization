@@ -58,7 +58,7 @@ def parse_args():
     p.add_argument("--epochs", type=int, default=120)
     p.add_argument("--batch_size", type=int, default=32)
     p.add_argument("--lr", type=float, default=1e-4)
-    p.add_argument("--num_workers", type=int, default=4)
+    p.add_argument("--num_workers", type=int, default=0)  # 0 = no RAM-heavy worker forks (safe on <256GB boxes)
     p.add_argument("--data_dir", type=str, default="./data")
     p.add_argument("--out_dir", type=str, default="./runs_studyA")
     p.add_argument("--results_dir", type=str, default="./results_studyA")
@@ -143,12 +143,14 @@ def main():
     train_loader = torch.utils.data.DataLoader(
         torch.utils.data.TensorDataset(train_w, train_lbl),
         batch_size=args.batch_size, shuffle=True, generator=g,
-        num_workers=args.num_workers, pin_memory=True, persistent_workers=True,
+        num_workers=args.num_workers, pin_memory=False,
+        persistent_workers=(args.num_workers > 0),
     )
     test_loader = torch.utils.data.DataLoader(
         torch.utils.data.TensorDataset(test_w, test_lbl),
         batch_size=args.batch_size, shuffle=False,
-        num_workers=args.num_workers, pin_memory=True, persistent_workers=True,
+        num_workers=args.num_workers, pin_memory=False,
+        persistent_workers=(args.num_workers > 0),
     )
 
     # --- model ---

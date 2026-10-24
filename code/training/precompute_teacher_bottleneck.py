@@ -76,7 +76,7 @@ def main():
 
     loader = torch.utils.data.DataLoader(
         torch.utils.data.TensorDataset(train_wo, train_w, train_lbl),
-        batch_size=args.batch_size, shuffle=False, num_workers=4, pin_memory=True)
+        batch_size=args.batch_size, shuffle=False, num_workers=0, pin_memory=False)
     feats = []
     t0 = time.time()
     with torch.no_grad():

@@ -123,7 +123,7 @@ def precompute(name, w_data, lbl_data, wo_data):
     loader = torch.utils.data.DataLoader(
         torch.utils.data.TensorDataset(wo_data, w_data, lbl_data),
         batch_size=BATCH_SIZE, shuffle=False,
-        num_workers=4, pin_memory=True,
+        num_workers=0, pin_memory=False,
     )
     outputs = []
     t0 = time.time()

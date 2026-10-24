@@ -60,7 +60,7 @@ def parse_args():
     p.add_argument("--epochs", type=int, default=50)
     p.add_argument("--batch_size", type=int, default=32)
     p.add_argument("--lr", type=float, default=1e-4)
-    p.add_argument("--num_workers", type=int, default=4)
+    p.add_argument("--num_workers", type=int, default=0)  # 0 = no RAM-heavy worker forks (safe on <256GB boxes)
     p.add_argument("--data_dir", type=str, default="./data")
     p.add_argument("--teacher_out", type=str, default="./data/teacher_train_outputs.pt")
     p.add_argument("--teacher_bottleneck", type=str, default="./data/teacher_train_bottleneck.pt")
