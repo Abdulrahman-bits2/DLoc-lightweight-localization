@@ -167,7 +167,23 @@ def main():
     best = dict(mean=float("inf"), median=None, p90=None, p99=None, epoch=-1)
     best_errors = None
 
-    for epoch in range(1, args.epochs + 1):
+    # --- mid-run resume: if a checkpoint for this config+seed exists, continue from it ---
+    ckpt_path = os.path.join(args.out_dir, f"resume_{run_label}.pt")
+    start_epoch = 1
+    if os.path.exists(ckpt_path):
+        ck = torch.load(ckpt_path, map_location=device, weights_only=False)
+        model.load_state_dict(ck["model"])
+        optimizer.load_state_dict(ck["optim"])
+        scheduler.load_state_dict(ck["sched"])
+        best, best_errors, start_epoch = ck["best"], ck["best_errors"], ck["epoch"] + 1
+        torch.set_rng_state(ck["torch_rng"])
+        np.random.set_state(ck["np_rng"])
+        if ck.get("cuda_rng") is not None and torch.cuda.is_available():
+            torch.cuda.set_rng_state_all(ck["cuda_rng"])
+        print(f"[resume] {run_label}: continuing from epoch {start_epoch} "
+              f"(best mean={best['mean']:.4f}m @ epoch {best['epoch']})")
+
+    for epoch in range(start_epoch, args.epochs + 1):
         t0 = time.time()
 
         # --- train ---
@@ -215,6 +231,15 @@ def main():
             best_errors = test_errors.copy()
             torch.save(model.state_dict(), os.path.join(save_dir, f"best_{tag}.pth"))
         torch.save(model.state_dict(), os.path.join(save_dir, f"latest_{tag}.pth"))
+        # resume checkpoint (atomic write) — full state to continue after an interruption
+        torch.save({
+            "epoch": epoch, "model": model.state_dict(),
+            "optim": optimizer.state_dict(), "sched": scheduler.state_dict(),
+            "best": best, "best_errors": best_errors,
+            "torch_rng": torch.get_rng_state(), "np_rng": np.random.get_state(),
+            "cuda_rng": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
+        }, ckpt_path + ".tmp")
+        os.replace(ckpt_path + ".tmp", ckpt_path)
 
     # --- persist results for aggregation ---
     err_path = os.path.join(args.results_dir, f"errors_{run_label}.npy")
@@ -229,6 +254,8 @@ def main():
     )
     with open(os.path.join(args.results_dir, f"summary_{run_label}.json"), "w") as f:
         json.dump(summary, f, indent=2)
+    if os.path.exists(ckpt_path):      # config complete -> drop its resume checkpoint
+        os.remove(ckpt_path)
 
     print(f"\nDone {run_label}: best mean={best['mean']:.4f}m median={best['median']:.4f}m "
           f"P90={best['p90']:.3f}m (epoch {best['epoch']})")
