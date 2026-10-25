@@ -184,7 +184,7 @@ def main():
             w = data[0].to(device)
             lbl = data[1].to(device)
             t_out_b = data[i_out].to(device) if i_out is not None else None
-            t_bot_b = data[i_bot].to(device) if i_bot is not None else None
+            t_bot_b = data[i_bot].to(device).float() if i_bot is not None else None  # bottleneck stored fp16
 
             out = student(w)
             L_GT = criterion(out, lbl)

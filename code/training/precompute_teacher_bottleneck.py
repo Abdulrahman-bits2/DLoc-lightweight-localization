@@ -77,16 +77,24 @@ def main():
     loader = torch.utils.data.DataLoader(
         torch.utils.data.TensorDataset(train_wo, train_w, train_lbl),
         batch_size=args.batch_size, shuffle=False, num_workers=0, pin_memory=False)
-    feats = []
+    # Fill a pre-allocated fp16 tensor in place (no list + torch.cat, which would
+    # momentarily DOUBLE the ~67 GB feature tensor and OOM a <256 GB-RAM box).
+    # fp16 halves RAM/disk (~33 GB); train_studyC casts the per-batch slice back to float.
+    N = train_w.shape[0]
+    result = None
+    off = 0
     t0 = time.time()
     with torch.no_grad():
         for i, (wo, w, lbl) in enumerate(loader):
             teacher.set_input(w, lbl, wo, shuffle_channel=False)
             teacher.test()
-            feats.append(enc.output.detach().cpu())
+            b = enc.output.detach().half().cpu()
+            if result is None:
+                result = torch.empty((N,) + tuple(b.shape[1:]), dtype=torch.float16)
+            result[off:off + b.shape[0]] = b
+            off += b.shape[0]
             if (i + 1) % 50 == 0:
-                print(f"  {(i+1)*args.batch_size}/{train_w.shape[0]}")
-    result = torch.cat(feats, 0)
+                print(f"  {off}/{N}")
     torch.save(result, args.out)
     print(f"Saved {args.out}: {tuple(result.shape)} in {time.time()-t0:.1f}s "
           f"({os.path.getsize(args.out)/1e9:.2f} GB)")
