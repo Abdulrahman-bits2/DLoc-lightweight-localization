@@ -1,0 +1,22 @@
+{
+  "tag": "noskip_dw1_wm1",
+  "run_label": "noskip_dw1_wm1_seed42",
+  "seed": 42,
+  "use_skips": false,
+  "decoder_width": 1.0,
+  "width_mult": 1.0,
+  "bottleneck": "none",
+  "pretrained_encoder": true,
+  "params": 2273281,
+  "flops": 1280268576,
+  "epochs": 120,
+  "best": {
+    "mean": 0.895398781604735,
+    "median": 0.7280109889280519,
+    "p90": 1.5830249470757691,
+    "p99": 3.667983035748505,
+    "epoch": 111
+  },
+  "save_dir": "./runs_studyA/noskip_dw1_wm1_seed42_2026-10-25-19-40-11",
+  "errors_file": "errors_noskip_dw1_wm1_seed42.npy"
+}

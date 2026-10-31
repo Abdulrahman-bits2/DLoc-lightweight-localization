@@ -1,0 +1,22 @@
+{
+  "tag": "skip_dw1_wm1_aspp",
+  "run_label": "skip_dw1_wm1_aspp_seed42",
+  "seed": 42,
+  "use_skips": true,
+  "decoder_width": 1.0,
+  "width_mult": 1.0,
+  "bottleneck": "aspp",
+  "pretrained_encoder": true,
+  "params": 3281057,
+  "flops": 0,
+  "epochs": 120,
+  "best": {
+    "mean": 0.7911431301196897,
+    "median": 0.670820393249937,
+    "p90": 1.4317821063276355,
+    "p99": 2.700758999060716,
+    "epoch": 77
+  },
+  "save_dir": "./runs_studyA/skip_dw1_wm1_aspp_seed42_2026-10-26-16-18-12",
+  "errors_file": "errors_skip_dw1_wm1_aspp_seed42.npy"
+}

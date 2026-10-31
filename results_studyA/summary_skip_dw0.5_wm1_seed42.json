@@ -1,0 +1,22 @@
+{
+  "tag": "skip_dw0.5_wm1",
+  "run_label": "skip_dw0.5_wm1_seed42",
+  "seed": 42,
+  "use_skips": true,
+  "decoder_width": 0.5,
+  "width_mult": 1.0,
+  "bottleneck": "none",
+  "pretrained_encoder": true,
+  "params": 2087569,
+  "flops": 1004083488,
+  "epochs": 120,
+  "best": {
+    "mean": 0.850554791981991,
+    "median": 0.670820393249937,
+    "p90": 1.5132745950421556,
+    "p99": 4.201190307520001,
+    "epoch": 89
+  },
+  "save_dir": "./runs_studyA/skip_dw0.5_wm1_seed42_2026-10-26-04-40-01",
+  "errors_file": "errors_skip_dw0.5_wm1_seed42.npy"
+}

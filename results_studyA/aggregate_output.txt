@@ -1,0 +1,42 @@
+Loaded 13 runs across 9 configs (expected 13 runs / 9 configs when complete).
+
+================================================================================================
+config                     params   FLOPs seeds         mean(m)   median     P90
+------------------------------------------------------------------------------------------------
+skip_dw1_wm0.5              0.83M   0.76G     1           1.037    0.791   1.868
+noskip_dw0.5_wm1            2.02M   0.92G     1           0.881    0.721   1.565
+skip_dw0.5_wm1              2.09M   1.00G     1           0.851    0.671   1.513
+noskip_dw1_wm1              2.27M   1.28G     3   0.882+/-0.018    0.719   1.570
+skip_dw1_wm1                2.41M   1.45G     3   0.830+/-0.003    0.695   1.435
+noskip_dw2_wm1              2.92M   2.51G     1           0.883    0.721   1.562
+skip_dw2_wm1                3.19M   2.85G     1           0.866    0.721   1.513
+skip_dw1_wm1_aspp           3.28M   0.00G     1           0.791    0.671   1.432
+skip_dw1_wm1.4              4.31M   2.28G     1           0.855    0.707   1.581
+================================================================================================
+
+--- Headline pair (decoder_width=1.0) ---
+  no-skip: 2.273M  mean 0.882+/-0.018 m  (3 seeds)
+  skip   : 2.409M  mean 0.830+/-0.003 m  (3 seeds)
+  skip improves mean by 6.0% for +6.0% params.
+  paired wilcoxon: stat=2.781e+06, p=1.80e-11 (seed 42, n=4260)
+
+--- 'At equal parameters' (no-skip curve interpolated to each skip point) ---
+  skip_dw0.5_wm1       2.09M: skip 0.851 m vs no-skip@equal-params 0.881 m  -> skip better by 0.031 m
+  skip_dw1_wm1         2.41M: skip 0.830 m vs no-skip@equal-params 0.882 m  -> skip better by 0.053 m
+  skip_dw2_wm1         3.19M: outside no-skip param range (not bracketed)
+
+Wrote ./results_studyA/studyA_summary.json
+
+--- LaTeX (main results) ---
+\begin{tabular}{lrrrrr}\toprule
+Config & Skips & Params & FLOPs & Mean (m) & P90 (m)\\\midrule
+skip dw1 wm0.5 & yes & 0.83M & 0.76G & 1.037 & 1.868\\
+noskip dw0.5 wm1 & no & 2.02M & 0.92G & 0.881 & 1.565\\
+skip dw0.5 wm1 & yes & 2.09M & 1.00G & 0.851 & 1.513\\
+noskip dw1 wm1 & no & 2.27M & 1.28G & 0.882$\pm$0.018 & 1.570\\
+skip dw1 wm1 & yes & 2.41M & 1.45G & 0.830$\pm$0.003 & 1.435\\
+noskip dw2 wm1 & no & 2.92M & 2.51G & 0.883 & 1.562\\
+skip dw2 wm1 & yes & 3.19M & 2.85G & 0.866 & 1.513\\
+skip dw1 wm1 aspp & yes & 3.28M & 0.00G & 0.791 & 1.432\\
+skip dw1 wm1.4 & yes & 4.31M & 2.28G & 0.855 & 1.581\\
+\bottomrule\end{tabular}

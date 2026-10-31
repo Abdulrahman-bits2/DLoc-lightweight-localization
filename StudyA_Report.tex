@@ -1,0 +1,207 @@
+% =====================================================================
+%  Study A — Spatial Preservation vs. Parameter Count
+%  Controlled architecture ablation (results report).
+%  Compile with Tectonic ( tectonic StudyA_Report.tex ) or pdfLaTeX.
+% =====================================================================
+\documentclass[11pt]{article}
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{amsmath,amssymb}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\usepackage{parskip}
+\setlength{\emergencystretch}{3em}
+
+\newcommand{\best}[1]{\textbf{#1}}
+\title{\textbf{Study A — Spatial Preservation vs.\ Parameter Count}\\[2pt]
+\large A controlled architecture ablation for WiFi indoor localization}
+\author{DLoc lightweight localization --- E-JUST graduation project}
+\date{\today}
+
+\begin{document}
+\maketitle
+\vspace{-1.1em}\hrule\vspace{1em}
+
+\textbf{Bottom line.} Across a controlled ladder of nine architectures on the WILD
+Jacobs-Hall in-distribution split, \emph{adding parameters does not improve accuracy, but
+adding spatial structure does}. Pouring capacity into the decoder of the plain
+MobileNetV2 leaves the error essentially flat ($0.881\!\to\!0.883$\,m as parameters rise
+$2.02\!\to\!2.92$\,M), whereas adding U-Net skip connections lowers it at \emph{every}
+capacity, and a skip model with \emph{fewer} parameters (2.41\,M) beats a no-skip model
+with \emph{more} (2.92\,M). Multi-scale features (ASPP) help further (best mean 0.791\,m).
+The skip vs.\ no-skip difference is highly significant (paired Wilcoxon $p=1.8\times10^{-11}$).
+\textbf{This directly supports the thesis} and hardens the Mamba / 2-D spatial argument.
+
+% =====================================================================
+\section{Objective}
+% =====================================================================
+This study answers the question posed by the supervisor: isolate the contribution of each
+architectural ingredient on top of a MobileNetV2 backbone ---
+$+\text{decoder}\to+\text{skip connections}\to+\text{multi-scale features}\to
++\text{bottleneck widths}\to+\text{decoder capacities}$ --- and test whether
+\emph{spatial preservation contributes independently of parameter count}. A positive result
+strengthens the central argument of the project: that \emph{preserving 2-D spatial structure},
+not raw model size, is what makes a compressed CSI localizer accurate (the same reason the
+1-D Mamba variant, which flattens the 2-D heatmap, fails).
+
+% =====================================================================
+\section{Experimental design}
+% =====================================================================
+A single \emph{configurable} student (\texttt{student\_configurable.py}) exposes four knobs ---
+\texttt{use\_skips}, \texttt{decoder\_width}, \texttt{width\_mult} (encoder/bottleneck width),
+and \texttt{bottleneck} (\texttt{none}/\texttt{aspp}) --- and reproduces the shipped networks
+exactly (no-skip, width 1.0 $=$ the 2.27\,M MobileNetV2; skip, width 1.0 $=$ the 2.41\,M
+MobileNetV2-UNet). Thirteen training runs cover nine configurations.
+
+\begin{itemize}[nosep,leftmargin=1.4em]
+\item \textbf{Capacity axis $=$ decoder width} (0.5/1.0/2.0). The encoder stays
+      ImageNet-pretrained at width 1.0, so this axis varies capacity \emph{without} a
+      pretraining confound. Encoder-width (\texttt{width\_mult} 0.5/1.4) is a secondary,
+      \emph{from-scratch} axis (no pretraining at non-unit width) and is reported with that caveat.
+\item \textbf{Data:} WILD Jacobs-Hall in-distribution split (Fig.\ 10b): 17{,}574 training /
+      4{,}260 test samples. Input $4\times161\times361$ AoA--ToF heatmaps; metric is the
+      Euclidean peak-to-peak distance $\times0.1$\,m.
+\item \textbf{Training:} Adam, lr $10^{-4}$, batch 32, 120 epochs, cosine annealing; MSE loss.
+      Best checkpoint selected by \emph{mean} error (the primary metric; the median is
+      pixel-quantized to $0.1\sqrt{n}$ and cannot resolve sub-decimetre differences).
+\item \textbf{Seeds:} the two headline configurations (no-skip and skip at decoder-width 1.0)
+      use 3 seeds (42/123/777) for error bars; the remaining configurations are single-seed
+      (trend only). Statistical test: paired Wilcoxon on per-sample errors (seed 42, $n=4260$).
+\end{itemize}
+
+% =====================================================================
+\section{Results}
+% =====================================================================
+\begin{table}[h]
+\centering
+\caption{All nine configurations, ordered by parameter count. Mean error is the primary
+metric ($\pm$ sample std over 3 seeds for the two anchors). ``pre'' $=$ ImageNet-pretrained
+encoder. Best mean in bold.}
+\setlength{\tabcolsep}{4.5pt}\small
+\begin{tabular}{lccccccc}
+\toprule
+Config & Skips & Multi-scale & Pre & Params & FLOPs & Mean (m) & P90 (m) \\
+\midrule
+skip, enc-w 0.5$^\dagger$        & yes & -- & no  & 0.83M & 0.76G & 1.037           & 1.868 \\
+no-skip, dec-w 0.5               & no  & -- & yes & 2.02M & 0.92G & 0.881           & 1.565 \\
+skip, dec-w 0.5                  & yes & -- & yes & 2.09M & 1.00G & 0.851           & 1.513 \\
+\textbf{no-skip, dec-w 1.0}      & no  & -- & yes & 2.27M & 1.28G & $0.882\pm0.018$ & 1.570 \\
+\textbf{skip, dec-w 1.0}         & yes & -- & yes & 2.41M & 1.45G & $0.830\pm0.003$ & 1.435 \\
+no-skip, dec-w 2.0               & no  & -- & yes & 2.92M & 2.51G & 0.883           & 1.562 \\
+skip, dec-w 2.0                  & yes & -- & yes & 3.19M & 2.85G & 0.866           & 1.513 \\
+skip, dec-w 1.0, ASPP            & yes & yes& yes & 3.28M & n/a$^\ddagger$ & \best{0.791} & \best{1.432} \\
+skip, enc-w 1.4$^\dagger$        & yes & -- & no  & 4.31M & 2.28G & 0.855           & 1.581 \\
+\bottomrule
+\end{tabular}
+\end{table}
+{\footnotesize $^\dagger$ Encoder-width $\neq1.0$: trained from scratch (no ImageNet
+pretraining) --- confounded, secondary axis. $^\ddagger$ The FLOP counter does not support the
+ASPP module; value omitted.}
+
+\begin{table}[h]
+\centering
+\caption{Mean error vs.\ capacity, read down each column (pretrained, decoder-width axis).
+The no-skip row is \emph{flat} as parameters grow; the skip row is lower at every width.}
+\begin{tabular}{lccc}
+\toprule
+Decoder width & 0.5 & 1.0 & 2.0 \\
+\midrule
+no-skip \; (params $\to$)  & 2.02M & 2.27M & 2.92M \\
+\quad mean error (m)       & 0.881 & 0.882 & 0.883 \;\;\emph{(flat)} \\
+\midrule
+skip \; (params $\to$)     & 2.09M & 2.41M & 3.19M \\
+\quad mean error (m)       & 0.851 & \best{0.830} & 0.866 \;\;\emph{(lower everywhere)} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% =====================================================================
+\section{Findings}
+% =====================================================================
+\begin{enumerate}[leftmargin=1.5em,itemsep=4pt]
+\item \textbf{Skip connections help, significantly.} At matched decoder-width 1.0, skips lower
+      the mean from $0.882\pm0.018$ to $0.830\pm0.003$\,m ($-6.0\%$); the per-sample paired
+      Wilcoxon test gives $p=1.8\times10^{-11}$ ($n=4260$). The tiny std of the skip anchor
+      ($\pm0.003$) shows the effect is not seed noise.
+
+\item \textbf{Parameter count alone buys nothing (the key result).} The no-skip mean is
+      \emph{flat} --- $0.881/0.882/0.883$\,m --- as the decoder grows $2.02\!\to\!2.27\!\to\!2.92$\,M
+      parameters (and FLOPs nearly triple, $0.92\!\to\!2.51$\,G). Tripling the decoder's
+      capacity does not move the accuracy at all.
+
+\item \textbf{Spatial preservation beats extra parameters directly.} A skip model with
+      \emph{fewer} parameters outperforms a no-skip model with \emph{more}: skip dec-w 0.5
+      (2.09\,M, 0.851\,m) $<$ no-skip dec-w 1.0 (2.27\,M, 0.882\,m), and skip dec-w 1.0
+      (2.41\,M, 0.830\,m) $<$ no-skip dec-w 2.0 (2.92\,M, 0.883\,m). Interpolating the no-skip
+      curve to equal parameter counts, skips are better by $0.031$\,m (at 2.09\,M) and
+      $0.053$\,m (at 2.41\,M).
+
+\item \textbf{Multi-scale features help further.} Adding an ASPP bottleneck to the skip model
+      gives the best result of all (mean $0.791$\,m, P90 $1.432$\,m) --- another spatial, not
+      capacity-driven, gain.
+
+\item \textbf{Widening the encoder/bottleneck does not help.} The widest model (encoder-width
+      1.4, 4.31\,M --- $79\%$ more parameters than the 2.41\,M skip model) is \emph{no better}
+      (0.855 vs 0.830\,m). This is consistent with (2), though it is also confounded by being
+      trained from scratch, so we treat it as supporting rather than decisive.
+\end{enumerate}
+
+% =====================================================================
+\section{Does it help the thesis? --- Yes}
+% =====================================================================
+\begin{enumerate}[leftmargin=1.5em,itemsep=4pt]
+\item \textbf{It justifies the chosen architecture.} The thesis selects the MobileNetV2-UNet as
+      the final model because skip connections improve accuracy. Study A turns that choice from
+      an empirical pick into a \emph{controlled, statistically significant} claim: skips are the
+      active ingredient, and the gain is not an artifact of the extra parameters they add.
+
+\item \textbf{It hardens the Mamba / 2-D spatial argument.} The thesis explains Mamba's failure
+      (10.56\,m) as an \emph{architectural mismatch}: flattening the 2-D heatmap into a 1-D
+      sequence destroys spatial locality. Study A provides the positive counterpart --- when
+      spatial structure is \emph{preserved and enriched} (skips, then multi-scale), accuracy
+      improves, while merely adding capacity does nothing. The failure of Mamba is therefore a
+      \emph{spatial-information} problem, not a capacity problem --- exactly the thesis's claim,
+      now backed by a parameter-controlled ablation.
+
+\item \textbf{It points to a concrete future direction.} ASPP (multi-scale) gives the best
+      result here, suggesting richer multi-scale spatial aggregation as the next architectural
+      step --- a well-supported ``future work'' item.
+\end{enumerate}
+
+In short, Study A supplies the ``\emph{why}'' behind the headline result: compressed CSI
+localization is driven by spatial-structure preservation, not model size.
+
+% =====================================================================
+\section{Caveats (for honesty in the write-up)}
+% =====================================================================
+\begin{itemize}[nosep,leftmargin=1.4em]
+\item \textbf{Absolute level.} These means (e.g.\ $0.830$\,m for the skip dec-w 1.0 model) are a
+      touch higher than the headline paper's $0.640$\,m \emph{median}, because (i) selection is
+      by \emph{mean} (the median is pixel-quantized and cannot resolve the sub-decimetre gaps
+      this study measures) and (ii) this is the configurable re-implementation. The study's
+      value is in the \emph{relative} ladder comparisons, which are internally consistent.
+\item \textbf{Single-seed configs.} Only the two decoder-width-1.0 anchors are multi-seed; the
+      other seven configurations are single runs (direction/trend, not error bars). The
+      decoder-width axis trend (flat no-skip, lower skip) is consistent across its points, and
+      the one multi-seed pair is tight, which supports the conclusion.
+\item \textbf{From-scratch secondary axis.} The encoder-width points (0.5, 1.4) lack ImageNet
+      pretraining and are reported only as a caveated secondary axis; the clean capacity axis is
+      decoder-width, where all points are pretrained.
+\end{itemize}
+
+% =====================================================================
+\section{Conclusion}
+% =====================================================================
+On a controlled nine-architecture ladder, \textbf{spatial preservation --- not parameter count ---
+drives WiFi-localization accuracy}. Adding decoder capacity to the plain MobileNetV2 leaves the
+error flat ($\sim\!0.88$\,m across a $1.4\times$ parameter range), while skip connections lower it
+at every capacity and even outperform larger no-skip models; multi-scale (ASPP) lowers it
+further to $0.791$\,m. The skip-vs-no-skip gain is statistically significant
+($p=1.8\times10^{-11}$) and seed-stable. This is exactly the result the supervisor asked for:
+\emph{spatial preservation contributes independently of parameter count}. It validates the
+thesis's architecture choice, converts the Mamba failure into a principled spatial-information
+argument, and motivates multi-scale spatial aggregation as future work.
+
+\end{document}

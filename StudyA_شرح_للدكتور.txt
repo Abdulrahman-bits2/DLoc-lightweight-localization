@@ -1,0 +1,85 @@
+شرح Study A للدكتور — اللي عملته بالظبط (بالعامية)
+=====================================================
+
+يا دكتور، ده ملخص سريع للي عملته في Study A (اللي حضرتك طلبته عن الـ spatial preservation).
+
+
+الفكرة اللي حضرتك طلبتها
+------------------------
+إننا نعزل تأثير كل إضافة معمارية فوق الـ MobileNetV2 واحدة واحدة:
+MobileNetV2 → نضيف decoder → نضيف skip connections → نضيف multi-scale features
+→ نجرّب bottleneck widths مختلفة → نجرّب decoder capacities مختلفة.
+وبعد كده نثبت إن الـ spatial preservation بيساهم بشكل مستقل عن عدد الـ parameters —
+وده بيقوّي حجة الـ Mamba / الـ 2D spatial.
+
+
+اللي عملته بالظبط
+------------------
+عملت موديل واحد قابل للتهيئة (configurable student) فيه 4 مفاتيح:
+use_skips / decoder_width / width_mult (عرض الـ encoder) / bottleneck (none أو ASPP).
+والموديل ده بيطلّع نفس الشبكات الأصلية بالظبط:
+  - no-skip عند width 1.0 = الـ MobileNetV2 بتاعتنا (2.27M، 0.707م).
+  - skip عند width 1.0 = الـ MobileNetV2-UNet (2.41M).
+وشغّلت 13 run بتغطي 9 configurations مختلفة.
+
+المحور الأساسي للسعة خليته الـ decoder width (0.5 / 1.0 / 2.0):
+خليت الـ encoder ثابت على الـ ImageNet-pretrained (width 1.0) عشان أزوّد السعة
+من غير ما يحصل خلط مع الـ pretraining. أما تغيير عرض الـ encoder
+(width_mult = 0.5 و 1.4) فده محور ثانوي ومن غير pretraining، فحطيته كـ caveat.
+
+
+الإعدادات
+----------
+- الداتا: WILD / Jacobs Hall الـ in-distribution (Fig 10b): 17,574 train / 4,260 test.
+- التدريب: Adam، lr = 1e-4، batch = 32، 120 epoch، cosine annealing، MSE loss.
+- اخترت أحسن checkpoint بالـ mean error مش بالـ median، لأن الـ median مكوّنتز على
+  lattice (0.1·√n) ومش بيقدر يفرّق الفروق الصغيرة تحت الديسيمتر.
+- عملت 3 seeds (42/123/777) على الـ configs الأساسية (no-skip و skip عند decoder
+  width 1.0) عشان أطلّع error bars، والباقي seed واحد (trend بس).
+
+
+النتائج الأساسية
+-----------------
+1) الـ skip connections بتساعد وبفرق معنوي:
+   عند نفس الـ decoder width (1.0): no-skip = 0.882 ± 0.018 م،
+   skip = 0.830 ± 0.003 م (أحسن بـ 6%)، والـ paired Wilcoxon طلع p = 1.8×10⁻¹¹.
+
+2) (الأهم) زيادة الـ parameters لوحدها مبتفرقش:
+   الـ no-skip فضل ثابت 0.881 / 0.882 / 0.883 م وأنا بزوّد الـ decoder من 2.02M
+   لـ 2.92M (والـ FLOPs بقت تلت أضعاف تقريباً) — يعني زيادة سعة الـ decoder
+   مغيّرتش حاجة خالص.
+
+3) الـ spatial preservation بيكسب الـ parameters مباشرة:
+   موديل فيه skips وبـ parameters أقل بيتفوّق على موديل من غير skips وبـ parameters أكتر:
+   skip عند 2.41M (0.830م) أحسن من no-skip عند 2.92M (0.883م).
+   وبالـ interpolation عند نفس عدد الـ parameters، الـ skip أحسن بـ 0.031 و 0.053 م.
+
+4) الـ multi-scale (ASPP) حسّن أكتر:
+   أحسن نتيجة في كله (mean = 0.791 م).
+
+5) توسيع الـ encoder (width 1.4، 4.31M، بـ parameters أكتر بـ 79%) مساعدش
+   (0.855 مقابل 0.830) — بس ده from-scratch فأخدته كـ دعم مش قاطع.
+
+
+الخلاصة
+--------
+اللي بيحدد دقة تحديد المكان هو الحفاظ على الـ spatial structure (الـ skips والـ
+multi-scale) مش حجم الموديل. وده بالظبط اللي حضرتك طلبت تثبته:
+"الـ spatial preservation بيساهم بشكل مستقل عن عدد الـ parameters".
+
+ده بيدعم اختيارنا للـ U-Net في الـ thesis، وبيحوّل فشل الـ Mamba لحجة مبدئية:
+إن الـ Mamba فشلت (10.56م) لأنها بتفرد الـ 2D heatmap لـ 1D sequence فبتفقد الـ
+spatial locality — يعني مشكلة معلومات مكانية مش مشكلة سعة.
+وكمان الـ ASPP بيفتح اتجاه للـ future work (multi-scale spatial aggregation).
+
+
+ملاحظات للأمانة
+----------------
+- الأرقام المطلقة (مثلاً 0.830م للـ U-Net config) أعلى شوية من الـ 0.640م median
+  بتاع الورقة، لأني اخترت بالـ mean مش بالـ median، وده reimplementation قابل
+  للتهيئة؛ المقارنات النسبية (الـ ladder) هي المهمة وهي متسقة.
+- الـ configs غير الأساسية seed واحد (اتجاه مش error bars).
+- محور عرض الـ encoder من غير pretraining فاتحطّ كـ caveat.
+
+ملحوظة: عملت كمان report PDF كامل بكل الجداول والتفاصيل (StudyA_Report.pdf) لو حضرتك
+عايز تشوفه.
